@@ -1,0 +1,84 @@
+app_id: afb967bf9164495591e849aad7ea62f2
+name: Servicenow Cmdb Ingest For Identity Protection
+description: Synchronize ServiceNow CMDB Configuration rules with Identity Protection Policies
+logo: https://assets.falcon.crowdstrike.com/apps/45b967bf9164495591e849aad7ea62f2/servicenow_logo.png
+vendor: ServiceNow
+vendor_products:
+    - CMDB
+use_case: Identity & Access
+manifest_version: "2023-05-09"
+ignored: []
+ui:
+    homepage: ""
+    extensions: []
+    pages: {}
+    dashboards: {}
+    navigation: {}
+api_integrations:
+    - id: 34e61b2bc71a48f2bce05bc74627b442
+      name: service now cmdb
+      description: ""
+      path: api-integrations/servicenow_table_int_4.json
+rtr_scripts: []
+collections:
+    - name: servicenow_idp_app_state
+      description: stores checkpoint details of this app
+      schema: collections/servicenow_idp_app_state.json
+      permissions: []
+      workflow_integration:
+        system_action: false
+        tags:
+            - servicenow_idp_app_state
+            - foundry-sample-servicenow-idp-policy-rules
+auth:
+    scopes:
+        - identity-entities:read
+        - identity-graphql:write
+        - identity-policy-rules:read
+        - identity-policy-rules:write
+    permissions: {}
+    roles: []
+functions:
+    - id: d1b44889d2614346a3208e42e93922f2
+      name: servicenowToIdpPolicyRulesTransformer
+      config: {}
+      description: Function translates ServiceNow data to IDP policy rules
+      path: functions/servicenowToIdpPolicyRulesTransformer
+      environment_variables: {}
+      handlers:
+        - name: transform_rules
+          description: This Function translates ServiceNow data to IDP policy rules
+          method: POST
+          api_path: /transform
+          payload_type: ""
+          request_schema: schemas/transform_rules_request_schema.json
+          response_schema: schemas/transform_rules_response_schema.json
+          workflow_integration:
+            id: fc69e4a114f24177a2715af8fdeb267e
+            disruptive: false
+            system_action: true
+            tags:
+                - 45b967bf9164495591e849aad7ea62f2
+                - servicenow_idp
+          permissions: []
+      language: python
+workflows:
+    - id: f59a6539ab49458d938c8b94ec89a378
+      name: ServiceNow to IDP policy rules synchronizer
+      path: workflows/ServiceNow_to_IDP_policy_rules_synchronizer.yml
+      permissions: []
+    - id: 4b45a2da9fdb4dcba3319f425e536a3f
+      name: Initialize or Reset checkpoint-LatestSysUpdatedOn
+      path: workflows/Initialize_or_Reset_checkpoint-LatestSysUpdatedOn.yml
+      permissions: []
+parsers: []
+logscale:
+    saved_searches: []
+lookup_files: []
+docs:
+    id: 6336812e18b14741a18115dde719ea4c
+    path: app_docs
+    entrypoint: README.md
+    links:
+        - servicenowRecords2.png
+        - wfSettings.png

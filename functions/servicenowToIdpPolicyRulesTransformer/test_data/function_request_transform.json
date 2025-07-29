@@ -1,0 +1,58 @@
+{
+  "result": {
+    "result": [
+      {
+        "u_host": "Suzanne770-PC83",
+        "u_cmdb_app_name": "App1 US",
+        "sys_mod_count": "0",
+        "sys_updated_on": "2025-05-13 20:09:59",
+        "sys_tags": "",
+        "u_cmdb_application_instance": "App1 US_PROD",
+        "u_user_guid": "700ce00a-aadf-4677-9eca-b8d9bc9ec6ac",
+        "sys_id": "64a85474c3ed2a504101ffbc05013117",
+        "sys_updated_by": "admin",
+        "u_user_name": "024Sally803929",
+        "sys_created_on": "2025-05-13 20:09:59",
+        "u_host_guid": "2abc549f-06de-44c7-af84-94117ef56be4",
+        "sys_created_by": "admin",
+        "u_cmdb_acronym": "App1",
+        "u_idp_rule_simulation_mode": "true",
+        "u_idp_rule_action": "BLOCK",
+        "u_idp_rule_enabled": "true",
+        "u_idp_rule_trigger": "access"
+      },
+      {
+        "u_host": "Laura04210-PC95",
+        "u_cmdb_app_name": "App1 US",
+        "sys_mod_count": "0",
+        "sys_updated_on": "2025-05-13 20:06:01",
+        "sys_tags": "",
+        "u_cmdb_application_instance": "APP1 US_PROD",
+        "u_user_guid": "700ce00a-aadf-4677-9eca-b8d9bc9ec6ac",
+        "sys_id": "ebf7d474c3ed2a504101ffbc05013123",
+        "sys_updated_by": "admin",
+        "u_user_name": "024Sally803929",
+        "sys_created_on": "2025-05-13 20:06:01",
+        "u_host_guid": "e8419f52-6616-47f6-8a85-744e77008a8d",
+        "sys_created_by": "admin",
+        "u_cmdb_acronym": "App1",
+        "u_idp_rule_simulation_mode": "true",
+        "u_idp_rule_action": "BLOCK",
+        "u_idp_rule_enabled": "true",
+        "u_idp_rule_trigger": "access"
+      }
+    ]
+  },
+  "latestSysUpdatedOn": "2025-05-12 18:53:31",
+  "lastSyncTime": "2025-05-12T02:12:26",
+  "cmdbAppNameColumn": "u_cmdb_app_name",
+  "userGuidColumn": "u_user_guid",
+  "hostGuidColumn": "u_host_guid",
+  "sysUpdatedOnColumn": "sys_updated_on",
+  "idpEnabledColumn": "u_idp_rule_enabled",
+  "idpActionColumn": "u_idp_rule_action",
+  "idpSimulationModeColumn": "u_idp_rule_simulation_mode",
+  "idpTriggerColumn": "u_idp_rule_trigger",
+  "idpTrigger": "u_idp_trigger",
+  "idpRuleNamePrefix": "ServiceNow_"
+}

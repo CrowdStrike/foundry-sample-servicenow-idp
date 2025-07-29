@@ -1,0 +1,104 @@
+name: ServiceNow to IDP policy rules synchronizer
+description: Synchronizes access rules from ServiceNow CMDB to IDP Policy rules.
+parameters:
+    actions:
+        configuration:
+            service_now_cmdb_table_api_23c0ead3:
+                properties:
+                    params.path.tableName:
+                        required: true
+                    params.query.sysparm_limit:
+                        required: true
+            transform_rules_aec4b131:
+                properties:
+                    cmdbAppNameColumn:
+                        required: true
+                    hostGuidColumn:
+                        required: true
+                    idpActionColumn:
+                        required: true
+                    idpEnabledColumn:
+                        required: true
+                    idpRuleNamePrefix:
+                        required: true
+                    idpSimulationModeColumn:
+                        required: true
+                    idpTriggerColumn:
+                        required: true
+                    sysUpdatedOnColumn:
+                        required: true
+                    userGuidColumn:
+                        required: true
+    trigger:
+        node_id: trigger
+        fields:
+            timer_event_definition:
+                required: true
+provision_on_install: true
+trigger:
+    next:
+        - create_variable_b321beaa
+    event: Schedule
+actions:
+    add_object_to_servicenow_idp_app_state_1783d1b9:
+        next:
+            - write_to_log_repo_468fe687
+        id: collections.servicenow_idp_app_state.create
+        properties:
+            custom_storage_object_key: servicenow_idp_app_state
+            lastSyncTime: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.lastSyncTime}
+            latestSysUpdatedOn: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.latestSysUpdatedOn}
+    create_variable_b321beaa:
+        next:
+            - get_object_from_servicenow_idp_app_state_12f7153b
+        id: 702d15788dbbffdf0b68d8e2f3599aa4
+        class: CreateVariable
+        properties:
+            variable_schema:
+                properties:
+                    servicenowIdpAppState:
+                        default: servicenow_idp_app_state
+                        description: Synchronization checkpoint storage
+                        format: foundryCustomStorageObjectKey
+                        type: string
+                type: object
+    get_object_from_servicenow_idp_app_state_12f7153b:
+        next:
+            - service_now_cmdb_table_api_23c0ead3
+        id: collections.servicenow_idp_app_state.get
+        properties:
+            custom_storage_object_key: ${WorkflowCustomVariable.servicenowIdpAppState}
+    service_now_cmdb_table_api_23c0ead3:
+        next:
+            - transform_rules_aec4b131
+        id: api_integrations.service now cmdb.GET__api_now_table_tablename
+        properties:
+            params:
+                query:
+                    sysparm_query: sys_updated_on>=${get_object_from_servicenow_idp_app_state_12f7153b.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn}
+    transform_rules_aec4b131:
+        next:
+            - add_object_to_servicenow_idp_app_state_1783d1b9
+        id: functions.servicenowToIdpPolicyRulesTransformer.transform_rules
+        properties:
+            lastSyncTime: ${get_object_from_servicenow_idp_app_state_12f7153b.CustomStorage.Collection_servicenow_idp_app_state.lastSyncTime}
+            latestSysUpdatedOn: ${get_object_from_servicenow_idp_app_state_12f7153b.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn}
+            result:
+                result: ${service_now_cmdb_table_api_23c0ead3.API_Integration.Custom_service_now_cmdb.service_now_cmdb_table_api.body.result}
+    write_to_log_repo_468fe687:
+        id: 0ec68880256f6192b9abef766d31fb04
+        properties:
+            _fields: []
+            custom_json:
+                checkpoint: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.latestSysUpdatedOn}
+                deleted: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.deleted}
+                deletedPolicyRules: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.deletedPolicyRules}
+                errors: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.errors}
+                ignoredRecords: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.ignoredSysIdCount}
+                new: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.new}
+                newPolicyRules: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.newPolicyRules}
+                syncTime: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.lastSyncTime}
+                updated: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.updated}
+                updatedPolicyRules: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.updatedPolicyRules}
+            foundry_app_id: 65b967bf9164495591e849aad7ea62f2
+            remove_action_prefix: false
