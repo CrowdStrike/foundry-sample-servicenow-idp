@@ -8,7 +8,7 @@ authors:
   - given-names:
     family-names: CrowdStrike
     email: oss-questions@crowdstrike.com
-repository-code: 'https://github.com/CrowdStrike/foundry-sample-servicenow-cmdb-ingest-for-identity-protection'
+repository-code: 'https://github.com/CrowdStrike/foundry-sample-servicenow-idp'
 url: 'https://www.crowdstrike.com'
 abstract: >-
   The CrowdStrike Foundry Sample App - Servicenow Cmdb Ingest For Identity Protection
