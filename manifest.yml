@@ -1,7 +1,7 @@
 app_id: 
 name: ServiceNow Cmdb Ingest For Identity Protection
 description: Synchronize ServiceNow CMDB Configuration rules with Identity Protection Policies
-logo: https://assets.falcon.crowdstrike.com/apps/45b967bf9164495591e849aad7ea62f2/servicenow_logo.png
+logo: images/servicenow_logo.png
 vendor: ServiceNow
 vendor_products:
     - CMDB
