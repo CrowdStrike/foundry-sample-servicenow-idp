@@ -1,6 +1,6 @@
 ![CrowdStrike Falcon](/images/cs-logo.png?raw=true)
 
-# Servicenow Cmdb Ingest For Identity Protection sample Foundry app
+# ServiceNow Cmdb Ingest For Identity Protection sample Foundry app
 
 The Servicenow Cmdb Ingest For Identity Protection sample Foundry app is a community-driven, open source project which serves as an example of an app which can be built using CrowdStrike's Foundry ecosystem. `foundry-sample-servicenow-idp` is an open source project, not a CrowdStrike product. As such, it carries no formal support, expressed or implied.
 
