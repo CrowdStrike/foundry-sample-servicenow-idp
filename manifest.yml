@@ -1,4 +1,4 @@
-app_id: afb967bf9164495591e849aad7ea62f2
+app_id: 
 name: Servicenow Cmdb Ingest For Identity Protection
 description: Synchronize ServiceNow CMDB Configuration rules with Identity Protection Policies
 logo: https://assets.falcon.crowdstrike.com/apps/45b967bf9164495591e849aad7ea62f2/servicenow_logo.png
@@ -15,7 +15,7 @@ ui:
     dashboards: {}
     navigation: {}
 api_integrations:
-    - id: 34e61b2bc71a48f2bce05bc74627b442
+    - id: 
       name: service now cmdb
       description: ""
       path: api-integrations/servicenow_table_int_4.json
@@ -39,7 +39,7 @@ auth:
     permissions: {}
     roles: []
 functions:
-    - id: d1b44889d2614346a3208e42e93922f2
+    - id: 
       name: servicenowToIdpPolicyRulesTransformer
       config: {}
       description: Function translates ServiceNow data to IDP policy rules
@@ -54,20 +54,18 @@ functions:
           request_schema: schemas/transform_rules_request_schema.json
           response_schema: schemas/transform_rules_response_schema.json
           workflow_integration:
-            id: fc69e4a114f24177a2715af8fdeb267e
+            id: 
             disruptive: false
             system_action: true
-            tags:
-                - 45b967bf9164495591e849aad7ea62f2
-                - servicenow_idp
+            tags: []
           permissions: []
       language: python
 workflows:
-    - id: f59a6539ab49458d938c8b94ec89a378
+    - id: 
       name: ServiceNow to IDP policy rules synchronizer
       path: workflows/ServiceNow_to_IDP_policy_rules_synchronizer.yml
       permissions: []
-    - id: 4b45a2da9fdb4dcba3319f425e536a3f
+    - id: 
       name: Initialize or Reset checkpoint-LatestSysUpdatedOn
       path: workflows/Initialize_or_Reset_checkpoint-LatestSysUpdatedOn.yml
       permissions: []
@@ -76,7 +74,7 @@ logscale:
     saved_searches: []
 lookup_files: []
 docs:
-    id: 6336812e18b14741a18115dde719ea4c
+    id: 
     path: app_docs
     entrypoint: README.md
     links:
