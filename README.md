@@ -19,7 +19,6 @@ Target users include organizations that use both CrowdStrike IDP and ServiceNow 
 ## Prerequisites
 
 * The Foundry CLI (instructions below).
-* _Delete or add tools below as required. These are from other samples._
 * Python 3.13+ (needed if modifying the app's functions). See [Python For Beginners](https://www.python.org/about/gettingstarted/) for installation instructions.
 
 ### Install the Foundry CLI
@@ -89,7 +88,7 @@ Next, go to **Foundry** > **App catalog**, find your app, and install it. Go to 
 
 ## About this sample app
 
-_Describe your app and its components._
+Refer the [app docs](https://github.com/CrowdStrike/foundry-sample-servicenow-cmdb-ingest-for-identity-protection/blob/main/app_docs/README.md)
 
 ## Foundry resources
 
