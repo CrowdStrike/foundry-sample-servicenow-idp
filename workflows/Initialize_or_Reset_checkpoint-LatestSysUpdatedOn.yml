@@ -1,0 +1,20 @@
+name: Initialize or Reset checkpoint-LatestSysUpdatedOn
+description: Initialize LastSyncTime and LatestSysUpdatedOn values in collection. This workflow can also be used to reset the checkpoint value of LatestSysUpdatedOn.
+provision_on_install: true
+trigger:
+    next:
+        - add_object_to_servicenow_idp_app_state_5a9ab88e
+    name: On demand
+    parameters:
+        properties:
+            latestSysUpdatedOn:
+                type: string
+                description: Latest Servicenow CMDB record's sys_updated_on time
+                default: "1970-01-01 00:00:00"
+        type: object
+actions:
+    add_object_to_servicenow_idp_app_state_5a9ab88e:
+        id: collections.servicenow_idp_app_state.create
+        properties:
+            custom_storage_object_key: servicenow_idp_app_state
+            latestSysUpdatedOn: ${latestSysUpdatedOn}

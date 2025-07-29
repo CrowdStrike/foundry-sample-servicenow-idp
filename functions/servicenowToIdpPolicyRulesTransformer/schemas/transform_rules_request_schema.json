@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "properties": {
+    "result": {
+      "type": "object"
+    },
+    "cmdbAppNameColumn": {
+      "type": "string",
+      "description": "App name Column in ServiceNow CMDB"
+    },
+    "userGuidColumn": {
+      "type": "string",
+      "description": "User GUID Column in ServiceNow CMDB"
+    },
+    "hostGuidColumn": {
+      "type": "string",
+      "description": "Host GUID Column in ServiceNow CMDB"
+    },
+    "sysUpdatedOnColumn": {
+      "type": "string",
+      "description": "sys_updated_on Column in ServiceNow CMDB"
+    },
+    "latestSysUpdatedOn": {
+      "type": "string",
+      "description": "Value from the latest updated record in ServiceNow CMDB. e.g. 2025-05-13 18:53:31"
+    },
+    "lastSyncTime": {
+      "type": "string",
+      "description": "Latest sync time from ServiceNow CMDB in ISO-8601 Date time format. e.g. 2025-05-14T02:12:26"
+    },
+    "idpEnabledColumn": {
+      "type": "string",
+      "description": "Enable IDP Policy rule"
+    },
+    "idpSimulationModeColumn": {
+      "type": "string",
+      "description": "Enable simulationMode for IDP Policy rule"
+    },
+    "idpActionColumn": {
+      "type": "string",
+      "description": "Action for IDP Policy rule"
+    },
+    "idpTriggerColumn": {
+      "type": "string",
+      "description": "Trigger for IDP Policy rule"
+    },
+    "idpRuleNamePrefix": {
+      "type": "string",
+      "description": "Prefix for IDP Policy rule name"
+    }
+  },
+  "type": "object",
+  "description": "This generated schema may need tweaking. In particular format fields are attempts at matching workflow field types but may not be correct.",
+  "required": ["cmdbAppNameColumn", "userGuidColumn", "hostGuidColumn", "sysUpdatedOnColumn", "idpEnabledColumn", "idpSimulationModeColumn", "idpActionColumn", "idpTriggerColumn", "idpRuleNamePrefix"]
+}
