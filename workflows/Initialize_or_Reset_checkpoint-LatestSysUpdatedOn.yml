@@ -9,7 +9,7 @@ trigger:
         properties:
             latestSysUpdatedOn:
                 type: string
-                description: Latest Servicenow CMDB record's sys_updated_on time
+                description: Latest ServiceNow CMDB record's sys_updated_on time
                 default: "1970-01-01 00:00:00"
         type: object
 actions:
