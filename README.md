@@ -11,7 +11,7 @@ This app is one of several App Templates included in Foundry that you can use to
 
 ## Description
 
-This app CrowdStrike’s Identity Protection (IDP) with ServiceNow’s Configuration Management Database (CMDB) to automatically manage access policies. The application bridges the gap between ServiceNow access approvals and IDP policy enforcement, eliminating manual synchronization processes. It ensures users can only access servers and applications they are explicitly authorized to access through ServiceNow requests, effectively preventing lateral movement within the network.
+This app integrates CrowdStrike’s Identity Protection (IDP) with ServiceNow’s Configuration Management Database (CMDB) to automatically manage access policies. The application bridges the gap between ServiceNow access approvals and IDP policy enforcement, eliminating manual synchronization processes. It ensures users can only access servers and applications they are explicitly authorized to access through ServiceNow requests, effectively preventing lateral movement within the network.
 
 Target users include organizations that use both CrowdStrike IDP and ServiceNow CMDB for access management, particularly those concerned with maintaining strict access controls while streamlining administrative workflows
 
