@@ -1,18 +1,21 @@
+"""
+This module transforms ServiceNow records to IDP policy rules.
+"""
+
+import json
 import logging
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from logging import Logger
 from typing import Optional, Dict, Any, List
 
 from crowdstrike.foundry.function import Function, Request, Response, APIError
 from falconpy import IdentityProtection
 
-from logging import Logger
-import json
+FUNC = Function.instance()
 
-func = Function.instance()
-
-@func.handler(method='POST', path='/transform')
+@FUNC.handler(method='POST', path='/transform')
 def transform_rules(request: Request, config: [dict[str, any], None], logger: Logger) -> Response:
     """
     Transform IDP policy rules by updating or creating rule conditions.
@@ -46,29 +49,15 @@ def _transform_rules(logger, config, request):
     #identity_protection = IdentityProtection(client_id="client-id-value", client_secret="client-secret-value")
 
     status_code = 200
-    response_body = {
-        "latestSysUpdatedOn": "",
-        "lastSyncTime": "",
-        "deleted": 0,
-        "deletedPolicyRules": list(),
-        "new": 0,
-        "newPolicyRules": list(),
-        "updated": 0,
-        "updatedPolicyRules": list(),
-        "ignoredSysIdCount": 0,
-        "errors": {
-            "description": "",
-            "errs": list()
-        }
-    }
+    response_body = initialize_response_body()
     merged_result = merge_apps_access(logger, transform_request, response_body)
-    for idp_policy_rule_name in merged_result:
+    for idp_policy_rule_name, access in merged_result.items():
         # Query IDP for current rule
         # Merge or Create new IDP rule request
         # delete and create the rule
         # update counts
-        operation_type = 'UNMODIFIED'
         idp_create_rule_request = IdpCreatePolicyRuleRequest()
+        initialize_idp_create_rule_request(access, idp_create_rule_request)
 
         # check for idp rule ID
         idp_policy_rule_id, errs = get_idp_policy_rule_id(logger, identity_protection, idp_policy_rule_name)
@@ -80,8 +69,9 @@ def _transform_rules(logger, config, request):
             status_code = 502
             break
 
-        copy_from_cmdb_response_to_idp_create_request(idp_create_rule_request.destination.entityId, idp_create_rule_request.sourceUser.entityId,
-                                                      merged_result[idp_policy_rule_name])
+        copy_from_cmdb_response_to_idp_create_request(idp_create_rule_request.destination.entity_id,
+                                                      idp_create_rule_request.source_user.entity_id,
+                                                      access)
         rule_conditions = None
         # Get policy rule details
         rule_conditions, errs = get_idp_policy_rule_details(identity_protection, idp_policy_rule_id, logger,
@@ -96,43 +86,13 @@ def _transform_rules(logger, config, request):
             break
         if 'idpPolicyRuleId' in response_body:
             response_body.pop('idpPolicyRuleId')
-        idp_create_rule_request.trigger = merged_result[idp_policy_rule_name]['trigger']
-        idp_create_rule_request.action = merged_result[idp_policy_rule_name]['action']
-        idp_create_rule_request.enabled = merged_result[idp_policy_rule_name]['enabled']
-        idp_create_rule_request.simulationMode = merged_result[idp_policy_rule_name]['simulation_mode']
 
         if rule_conditions is not None:
-            # Process rule conditions
-            for condition in rule_conditions:
-                # Copy from existing condition to idp create request
-                if 'destination' in condition:
-                    if 'entityId' in condition['destination']:
-                        add_to_idp_request_from_rule_condition(idp_create_rule_request.destination.entityId,
-                                                               condition['destination']['entityId'])
-                    if 'groupMembership' in condition['destination']:
-                        add_to_idp_request_from_rule_condition(idp_create_rule_request.destination.groupMembership,
-                                                               condition['destination']['groupMembership'])
-                if 'sourceUser' in condition:
-                    if 'entityId' in condition['sourceUser']:
-                        add_to_idp_request_from_rule_condition(idp_create_rule_request.sourceUser.entityId,
-                                                               condition['sourceUser']['entityId'])
-                    if 'groupMembership' in condition['sourceUser']:
-                        add_to_idp_request_from_rule_condition(idp_create_rule_request.sourceUser.groupMembership,
-                                                               condition['sourceUser']['groupMembership'])
-            operation_type = 'UPDATED'
-
-            # Delete existing policy
-            deleted_rules = identity_protection.delete_policy_rules(parameters={'ids': idp_policy_rule_id})
-            if deleted_rules['status_code'] != 200:
-                errs = deleted_rules['body']['errors'] if deleted_rules and 'body' in deleted_rules and 'errors' in \
-                                                          deleted_rules['body'] else None
-                logger.error("Error deleting IDP policy rule details: %s", errs)
-                response_body['errors']['errs'] = errs
-                response_body['errors'][
-                    'description'] = "Error deleting IDP policy rule details for ID - " + idp_policy_rule_id + " and policy rule name - " + idp_policy_rule_name
+            if update_idp_rule(rule_conditions, idp_create_rule_request, identity_protection, idp_policy_rule_id,
+                               idp_policy_rule_name, response_body, logger) != 200:
                 status_code = 502
                 break
-            logger.info("deleted policy - " + str(idp_policy_rule_id))
+            operation_type = 'UPDATED'
         else:
             # create new rule
             logger.info("Create new rule")
@@ -140,27 +100,15 @@ def _transform_rules(logger, config, request):
 
         idp_create_rule_request.name = idp_policy_rule_name
         # create policy rule
-        created_rule = identity_protection.create_policy_rule(body=idp_create_rule_request.to_dict())
-        if created_rule['status_code'] != 200:
-            errs = created_rule['body']['errors'] if created_rule and 'body' in created_rule and 'errors' in \
-                                                     created_rule['body'] else None
-            logger.error("Error creating IDP policy rule details: %s", errs)
-            response_body['errors']['errs'] = errs
-            response_body['errors'][
-                'description'] = "Error creating IDP policy rule details for policy rule name - " + idp_policy_rule_name
+        if create_idp_rule(identity_protection, idp_create_rule_request, response_body, idp_policy_rule_name,
+                           logger) != 200:
             status_code = 502
             break
-        if is_timestamp_latest(latest_sys_updated_on, merged_result[idp_policy_rule_name]['latestSysUpdatedOn']):
-            latest_sys_updated_on = merged_result[idp_policy_rule_name]['latestSysUpdatedOn']
 
-        if operation_type == 'NEW':
-            response_body['new'] += 1
-            if idp_policy_rule_name not in response_body['newPolicyRules']:
-                response_body['newPolicyRules'].append(idp_policy_rule_name)
-        elif operation_type == 'UPDATED':
-            response_body['updated'] += 1
-            if idp_policy_rule_name not in response_body['updatedPolicyRules']:
-                response_body['updatedPolicyRules'].append(idp_policy_rule_name)
+        if is_timestamp_latest(latest_sys_updated_on, access['latestSysUpdatedOn']):
+            latest_sys_updated_on = access['latestSysUpdatedOn']
+
+        update_metrics_in_response_body(idp_policy_rule_name, operation_type, response_body)
     response_body['lastSyncTime'] = get_current_time()
     if latest_sys_updated_on:
         response_body['latestSysUpdatedOn'] = latest_sys_updated_on
@@ -171,7 +119,111 @@ def _transform_rules(logger, config, request):
     )
 
 
+def initialize_idp_create_rule_request(access, idp_create_rule_request):
+    """
+    Initialize idp create rule request
+    """
+    idp_create_rule_request.trigger = access['trigger']
+    idp_create_rule_request.action = access['action']
+    idp_create_rule_request.enabled = access['enabled']
+    idp_create_rule_request.simulation_mode = access['simulation_mode']
+
+
+def update_metrics_in_response_body(idp_policy_rule_name, operation_type, response_body):
+    """
+    Update metrics in response body
+    """
+    if operation_type == 'NEW':
+        response_body['new'] += 1
+        if idp_policy_rule_name not in response_body['newPolicyRules']:
+            response_body['newPolicyRules'].append(idp_policy_rule_name)
+    elif operation_type == 'UPDATED':
+        response_body['updated'] += 1
+        if idp_policy_rule_name not in response_body['updatedPolicyRules']:
+            response_body['updatedPolicyRules'].append(idp_policy_rule_name)
+
+
+def initialize_response_body() -> dict:
+    """
+    Initialize response body
+    """
+    return {
+        "latestSysUpdatedOn": "",
+        "lastSyncTime": "",
+        "deleted": 0,
+        "deletedPolicyRules": [],
+        "new": 0,
+        "newPolicyRules": [],
+        "updated": 0,
+        "updatedPolicyRules": [],
+        "ignoredSysIdCount": 0,
+        "errors": {
+            "description": "",
+            "errs": []
+        }
+    }
+
+
+def update_idp_rule(rule_conditions, idp_create_rule_request, identity_protection, idp_policy_rule_id,
+                    idp_policy_rule_name, response_body, logger) -> int:
+    """
+    Update an existing IDP policy rule.
+    """
+    status_code = 200
+    # Process rule conditions
+    for condition in rule_conditions:
+        # Copy from existing condition to idp create request
+        if 'destination' in condition:
+            if 'entityId' in condition['destination']:
+                add_to_idp_request_from_rule_condition(idp_create_rule_request.destination.entity_id,
+                                                       condition['destination']['entityId'])
+            if 'groupMembership' in condition['destination']:
+                add_to_idp_request_from_rule_condition(idp_create_rule_request.destination.group_membership,
+                                                       condition['destination']['groupMembership'])
+        if 'sourceUser' in condition:
+            if 'entityId' in condition['sourceUser']:
+                add_to_idp_request_from_rule_condition(idp_create_rule_request.source_user.entity_id,
+                                                       condition['sourceUser']['entityId'])
+            if 'groupMembership' in condition['sourceUser']:
+                add_to_idp_request_from_rule_condition(idp_create_rule_request.source_user.group_membership,
+                                                       condition['sourceUser']['groupMembership'])
+
+    # Delete existing policy
+    deleted_rules = identity_protection.delete_policy_rules(parameters={'ids': idp_policy_rule_id})
+    if deleted_rules['status_code'] != 200:
+        errs = deleted_rules['body']['errors'] if deleted_rules and 'body' in deleted_rules and 'errors' in \
+                                                  deleted_rules['body'] else None
+        logger.error("Error deleting IDP policy rule details: %s", errs)
+        response_body['errors']['errs'] = errs
+        response_body['errors'][
+            'description'] = ("Error deleting IDP policy rule details for ID - " + idp_policy_rule_id
+                              + " and policy rule name - " + idp_policy_rule_name)
+        status_code = 502
+    logger.info("deleted policy - " + str(idp_policy_rule_id))
+    return status_code
+
+def create_idp_rule(identity_protection, idp_create_rule_request, response_body, idp_policy_rule_name, logger) -> int:
+    """
+    Create IDP policy rule
+    """
+    # create policy rule
+    status_code = 200
+    created_rule = identity_protection.create_policy_rule(body=idp_create_rule_request.to_dict())
+    if created_rule['status_code'] != 200:
+        errs = created_rule['body']['errors'] if created_rule and 'body' in created_rule and 'errors' in \
+                                                 created_rule['body'] else None
+        logger.error("Error creating IDP policy rule details: %s", errs)
+        response_body['errors']['errs'] = errs
+        response_body['errors'][
+            'description'] = "Error creating IDP policy rule details for policy rule name - " + idp_policy_rule_name
+        status_code = 502
+    return status_code
+
+
 def get_current_time():
+    """
+    Get current time in ISO format
+    """
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S') + 'Z'
 
 def parse_servicenow_timestamp(timestamp):
@@ -179,9 +231,8 @@ def parse_servicenow_timestamp(timestamp):
     if 'T' in timestamp and 'Z' in timestamp:
         # ISO format
         return datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-    else:
-        # ServiceNow format: "YYYY-MM-DD HH:MM:SS"
-        return datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+    # ServiceNow format: "YYYY-MM-DD HH:MM:SS"
+    return datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
 
 def is_timestamp_latest(stored_timestamp, new_timestamp) -> bool:
     """Compare timestamps and return true if latest"""
@@ -193,8 +244,8 @@ def merge_apps_access(logger, transform_request, response_body) -> dict:
 
     This function processes records from the request body, filtering out records older than
     the latest_sys_updated_on timestamp. For valid records, it creates a consolidated dictionary
-    keyed by application name (prefixed with the value provided by the transform_request), collecting unique user GUIDs and host GUIDs
-    for each application, while tracking the most recent update timestamp.
+    keyed by application name (prefixed with the value provided by the transform_request), collecting unique user GUIDs
+    and host GUIDs for each application, while tracking the most recent update timestamp.
 
     Args:
         logger: Logger instance for reporting issues
@@ -204,9 +255,10 @@ def merge_apps_access(logger, transform_request, response_body) -> dict:
     Returns:
         Dictionary mapping application names to their aggregated access information
     """
-    reduced = dict()
+    reduced = {}
     for r in transform_request.result:
-        if transform_request.cmdb_app_name_column not in r or transform_request.user_guid_column not in r or transform_request.host_guid_column not in r or transform_request.sys_updated_on_column not in r:
+        if (transform_request.cmdb_app_name_column not in r or transform_request.user_guid_column not in r
+                or transform_request.host_guid_column not in r or transform_request.sys_updated_on_column not in r):
             logger.info("Missing u_cmdb_app_name or u_user_guid or u_host_guid or sys_updated_on")
             continue
         # ignore records before transform_request.sys_updated_on_column
@@ -240,6 +292,9 @@ def merge_apps_access(logger, transform_request, response_body) -> dict:
 
 
 def get_idp_policy_rule_id(logger, identity_protection, rule_name):
+    """
+    Get the id of the policy rule
+    """
     policy_ids = identity_protection.query_policy_rules(parameters={'name': rule_name})
     idp_policy_rule_id = None
     errs = None
@@ -258,11 +313,15 @@ def get_idp_policy_rule_id(logger, identity_protection, rule_name):
 
 
 def get_idp_policy_rule_details(identity_protection, idp_policy_rule_id, logger, response_body, rule_conditions):
+    """
+    Get the policy rule details
+    """
     errs = None
     if idp_policy_rule_id is not None and len(idp_policy_rule_id) > 0:
         if len(idp_policy_rule_id) > 0:
             if len(idp_policy_rule_id) > 1:
-                logger.info("More than one policy rule Id is provided - " + idp_policy_rule_id + ". Using the first one " + idp_policy_rule_id[0])
+                logger.info("More than one policy rule Id is provided - " + idp_policy_rule_id + ". Using the first one "
+                            + idp_policy_rule_id[0])
 
             idp_policy_rule_id = idp_policy_rule_id[0]
             logger.info("get_policy_rules for - " + idp_policy_rule_id)
@@ -270,29 +329,31 @@ def get_idp_policy_rule_details(identity_protection, idp_policy_rule_id, logger,
             # get IDP policy rule details
             policy_rules = identity_protection.get_policy_rules(parameters={'ids': idp_policy_rule_id})
             #logger.info("Received policy_rules = " + json.dumps(policy_rules))
-            if (policy_rules is not None and policy_rules['status_code'] == 200 and policy_rules['body'] is not None and 'resources' in policy_rules['body']
+            if (policy_rules is not None and policy_rules['status_code'] == 200 and policy_rules['body'] is not None
+                    and 'resources' in policy_rules['body']
                     and len(policy_rules['body']['resources']) > 0):
                 if len(policy_rules['body']['resources']) > 1:
                     logger.info("Found multiple policies. size - " + str(
                         len(policy_rules['body']['resources'])) + ". Choosing first policy.")
                 rule_conditions = policy_rules['body']['resources'][0]['ruleConditions']
             if policy_rules and policy_rules['status_code'] != 200:
-                errs = policy_rules['body']['errors'] if policy_rules and 'body' in policy_rules and 'errors' in policy_rules[
-                    'body'] else None
+                errs = policy_rules['body']['errors'] if (policy_rules and 'body' in policy_rules
+                                                          and 'errors' in policy_rules['body']) else None
     return rule_conditions, errs
 
 
-# def copy_from_cmdb_response_to_idp_create_request(destination_entity_id, source_user_entity_id, entities):
-#     destination_entity_id['include'] = merge_lists_unique_ordered(destination_entity_id['include'], list(entities['host_guid']))
-#     source_user_entity_id['exclude'] = merge_lists_unique_ordered(source_user_entity_id['exclude'], list(entities['user_guid']))
-
-
 def copy_from_cmdb_response_to_idp_create_request(destination_entity_id, source_user_entity_id, entities):
+    """
+    Copy the entities from the CMDB response to the create IDP policy rule request
+    """
     destination_entity_id.include = merge_lists_unique_ordered(destination_entity_id.include, list(entities['host_guid']))
     source_user_entity_id.exclude = merge_lists_unique_ordered(source_user_entity_id.exclude, list(entities['user_guid']))
 
 
 def add_to_idp_request_from_rule_condition(idp_request_entity, rule_entity):
+    """
+    Add the rule entity to the IDP request
+    """
     if 'options' in rule_entity:
         for option in rule_entity['options']:
             rule_entity_options = rule_entity['options']
@@ -319,8 +380,11 @@ def merge_lists_unique_ordered(list1, list2):
     return list(OrderedDict.fromkeys(list1 + list2))
 
 
-@func.handler(method='GET', path='/healthz')
+@FUNC.handler(method='GET', path='/healthz')
 def healthz(request, config):
+    """
+    Health check endpoint.
+    """
     return Response(code=200)
 
 @dataclass
@@ -341,7 +405,7 @@ class TransformRequest:
     @classmethod
     def from_request(cls, request_body: Dict[str, Any]) -> 'TransformRequest':
         """Create a RequestConfig instance from a request body dictionary."""
-        result_data = dict()
+        result_data = {}
         if 'result' in request_body and 'result' in request_body['result']:
             result_data = request_body['result']['result']
         return cls(
@@ -369,14 +433,14 @@ class FilterCriteria:
 @dataclass
 class Destination:
     """Class representing destination filtering."""
-    entityId: FilterCriteria = field(default_factory=FilterCriteria)
-    groupMembership: FilterCriteria = field(default_factory=FilterCriteria)
+    entity_id: FilterCriteria = field(default_factory=FilterCriteria)
+    group_membership: FilterCriteria = field(default_factory=FilterCriteria)
 
 @dataclass
 class Activity:
     """Class representing activity filtering."""
-    accessType: FilterCriteria = field(default_factory=FilterCriteria)
-    accessTypeCustom: FilterCriteria = field(default_factory=FilterCriteria)
+    access_type: FilterCriteria = field(default_factory=FilterCriteria)
+    access_type_custom: FilterCriteria = field(default_factory=FilterCriteria)
 
 @dataclass
 class SourceEndpointGroupMembership:
@@ -386,14 +450,14 @@ class SourceEndpointGroupMembership:
 @dataclass
 class SourceEndpoint:
     """Class representing source endpoint filtering."""
-    entityId: FilterCriteria = field(default_factory=FilterCriteria)
-    groupMembership: SourceEndpointGroupMembership = field(default_factory=SourceEndpointGroupMembership)
+    entity_id: FilterCriteria = field(default_factory=FilterCriteria)
+    group_membership: SourceEndpointGroupMembership = field(default_factory=SourceEndpointGroupMembership)
 
 @dataclass
 class SourceUser:
     """Class representing source user filtering."""
-    entityId: FilterCriteria = field(default_factory=FilterCriteria)
-    groupMembership: FilterCriteria = field(default_factory=FilterCriteria)
+    entity_id: FilterCriteria = field(default_factory=FilterCriteria)
+    group_membership: FilterCriteria = field(default_factory=FilterCriteria)
 
 @dataclass
 class IdpCreatePolicyRuleRequest:
@@ -404,9 +468,9 @@ class IdpCreatePolicyRuleRequest:
     destination: Destination = field(default_factory=Destination)
     activity: Activity = field(default_factory=Activity)
     enabled: bool = True
-    simulationMode: bool = True
-    sourceEndpoint: SourceEndpoint = field(default_factory=SourceEndpoint)
-    sourceUser: SourceUser = field(default_factory=SourceUser)
+    simulation_mode: bool = True
+    source_endpoint: SourceEndpoint = field(default_factory=SourceEndpoint)
+    source_user: SourceUser = field(default_factory=SourceUser)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'IdpCreatePolicyRuleRequest':
@@ -416,19 +480,19 @@ class IdpCreatePolicyRuleRequest:
             action=data.get('action', ''),
             trigger=data.get('trigger', ''),
             enabled=data.get('enabled', False),
-            simulationMode=data.get('simulationMode', False)
+            simulation_mode=data.get('simulationMode', False)
         )
 
         # Process destination
         if 'destination' in data:
             dest_data = data['destination']
             if 'entityId' in dest_data:
-                rule.destination.entityId = FilterCriteria(
+                rule.destination.entity_id = FilterCriteria(
                     exclude=dest_data['entityId'].get('exclude', []),
                     include=dest_data['entityId'].get('include', [])
                 )
             if 'groupMembership' in dest_data:
-                rule.destination.groupMembership = FilterCriteria(
+                rule.destination.group_membership = FilterCriteria(
                     exclude=dest_data['groupMembership'].get('exclude', []),
                     include=dest_data['groupMembership'].get('include', [])
                 )
@@ -437,12 +501,12 @@ class IdpCreatePolicyRuleRequest:
         if 'activity' in data:
             act_data = data['activity']
             if 'accessType' in act_data:
-                rule.activity.accessType = FilterCriteria(
+                rule.activity.access_type = FilterCriteria(
                     exclude=act_data['accessType'].get('exclude', []),
                     include=act_data['accessType'].get('include', [])
                 )
             if 'accessTypeCustom' in act_data:
-                rule.activity.accessTypeCustom = FilterCriteria(
+                rule.activity.access_type_custom = FilterCriteria(
                     exclude=act_data['accessTypeCustom'].get('exclude', []),
                     include=act_data['accessTypeCustom'].get('include', [])
                 )
@@ -451,12 +515,12 @@ class IdpCreatePolicyRuleRequest:
         if 'sourceEndpoint' in data:
             se_data = data['sourceEndpoint']
             if 'entityId' in se_data:
-                rule.sourceEndpoint.entityId = FilterCriteria(
+                rule.source_endpoint.entity_id = FilterCriteria(
                     exclude=se_data['entityId'].get('exclude', []),
                     include=se_data['entityId'].get('include', [])
                 )
             if 'groupMembership' in se_data:
-                rule.sourceEndpoint.groupMembership = SourceEndpointGroupMembership(
+                rule.source_endpoint.group_membership = SourceEndpointGroupMembership(
                     include=se_data['groupMembership'].get('include', [])
                 )
 
@@ -464,12 +528,12 @@ class IdpCreatePolicyRuleRequest:
         if 'sourceUser' in data:
             su_data = data['sourceUser']
             if 'entityId' in su_data:
-                rule.sourceUser.entityId = FilterCriteria(
+                rule.source_user.entity_id = FilterCriteria(
                     exclude=su_data['entityId'].get('exclude', []),
                     include=su_data['entityId'].get('include', [])
                 )
             if 'groupMembership' in su_data:
-                rule.sourceUser.groupMembership = FilterCriteria(
+                rule.source_user.group_membership = FilterCriteria(
                     exclude=su_data['groupMembership'].get('exclude', []),
                     include=su_data['groupMembership'].get('include', [])
                 )
@@ -484,46 +548,46 @@ class IdpCreatePolicyRuleRequest:
             'trigger': self.trigger,
             'destination': {
                 'entityId': {
-                    'exclude': self.destination.entityId.exclude,
-                    'include': self.destination.entityId.include
+                    'exclude': self.destination.entity_id.exclude,
+                    'include': self.destination.entity_id.include
                 },
                 'groupMembership': {
-                    'exclude': self.destination.groupMembership.exclude,
-                    'include': self.destination.groupMembership.include
+                    'exclude': self.destination.group_membership.exclude,
+                    'include': self.destination.group_membership.include
                 }
             },
             'activity': {
                 'accessType': {
-                    'exclude': self.activity.accessType.exclude,
-                    'include': self.activity.accessType.include
+                    'exclude': self.activity.access_type.exclude,
+                    'include': self.activity.access_type.include
                 },
                 'accessTypeCustom': {
-                    'exclude': self.activity.accessTypeCustom.exclude,
-                    'include': self.activity.accessTypeCustom.include
+                    'exclude': self.activity.access_type_custom.exclude,
+                    'include': self.activity.access_type_custom.include
                 }
             },
             'enabled': self.enabled,
-            'simulationMode': self.simulationMode,
+            'simulationMode': self.simulation_mode,
             'sourceEndpoint': {
                 'entityId': {
-                    'exclude': self.sourceEndpoint.entityId.exclude,
-                    'include': self.sourceEndpoint.entityId.include
+                    'exclude': self.source_endpoint.entity_id.exclude,
+                    'include': self.source_endpoint.entity_id.include
                 },
                 'groupMembership': {
-                    'include': self.sourceEndpoint.groupMembership.include
+                    'include': self.source_endpoint.group_membership.include
                 }
             },
             'sourceUser': {
                 'entityId': {
-                    'exclude': self.sourceUser.entityId.exclude,
-                    'include': self.sourceUser.entityId.include
+                    'exclude': self.source_user.entity_id.exclude,
+                    'include': self.source_user.entity_id.include
                 },
                 'groupMembership': {
-                    'exclude': self.sourceUser.groupMembership.exclude,
-                    'include': self.sourceUser.groupMembership.include
+                    'exclude': self.source_user.group_membership.exclude,
+                    'include': self.source_user.group_membership.include
                 }
             }
         }
 
 if __name__ == '__main__':
-    func.run()
+    FUNC.run()
