@@ -29,11 +29,14 @@ def transform_rules(request: Request, config: [dict[str, any], None], logger: Lo
     Returns:
         Response: HTTP response with a summary of IDP Policy rule synchronization
     """
+    # placeholder to use data from config
+    if config:
+        pass
     logger.info("/transform")
-    return _transform_rules(logger, config, request)
+    return _transform_rules(logger, request)
 
 
-def _transform_rules(logger, config, request):
+def _transform_rules(logger, request):
     if 'result' not in request.body or 'result' not in request.body['result']:
         return Response(
             code=400,
@@ -379,13 +382,6 @@ def merge_lists_unique_ordered(list1, list2):
     """
     return list(OrderedDict.fromkeys(list1 + list2))
 
-
-@FUNC.handler(method='GET', path='/healthz')
-def healthz(request, config):
-    """
-    Health check endpoint.
-    """
-    return Response(code=200)
 
 @dataclass
 class TransformRequest:
