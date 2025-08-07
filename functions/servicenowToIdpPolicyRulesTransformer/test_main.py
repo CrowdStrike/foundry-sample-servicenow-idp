@@ -1,3 +1,7 @@
+"""
+This test validates function
+"""
+import importlib
 import json
 import logging
 import unittest
@@ -5,30 +9,36 @@ from unittest.mock import patch
 
 from crowdstrike.foundry.function import Request
 
-def mock_handler(*args, **kwargs):
+import main
+
+def mock_handler(*args, **kwargs): # pylint: disable=unused-argument
+    """Mock func"""
     def identity(func):
         return func
     return identity
 
 class FnTestCase(unittest.TestCase):
+    """
+    Function test suite
+    """
     logger = logging.getLogger(__name__)
     def setUp(self):
         patcher = patch('crowdstrike.foundry.function.Function.handler', new=mock_handler)
         self.addCleanup(patcher.stop)
         self.handler_patch = patcher.start()
 
-        import importlib
-        import main
         importlib.reload(main)
 
     def test_transform_rules_request(self):
-        from main import transform_rules
+        """
+        test transform rules request
+        """
         request = Request()
-        with open('./test_data/function_request_transform.json', 'r') as file:
+        with open('./test_data/function_request_transform.json', 'r', encoding='utf-8') as file:
             request.body = json.load(file)
 
-        response = transform_rules(request, config=dict(), logger=self.logger)
-        # TODO: Need to mock IDP service
+        response = main.transform_rules(request, config={}, logger=self.logger)
+        # Need to mock IDP service
         self.assertEqual(502, response.code)
 
     def test_from_request_with_complete_data(self):
@@ -53,9 +63,8 @@ class FnTestCase(unittest.TestCase):
             }
         }
 
-        from main import TransformRequest
         # Create the transform request
-        transform_request = TransformRequest.from_request(request_body)
+        transform_request = main.TransformRequest.from_request(request_body)
 
         # Assert all fields are correctly set
         self.assertEqual(transform_request.latest_sys_updated_on, '2023-05-15T10:30:00Z')
@@ -74,7 +83,7 @@ class FnTestCase(unittest.TestCase):
         self.assertEqual(transform_request.result['name'], 'Test Result')
 
     def test_idp_create_rule(self):
-        #test idp create rule data class
+        """test idp create rule data class"""
         # Sample JSON data
         input_policy_dict = {
           "name": "ServiceNow_App 1",
@@ -124,9 +133,8 @@ class FnTestCase(unittest.TestCase):
         }
 
 
-        from main import IdpCreatePolicyRuleRequest
         # Create PolicyRule instance from dictionary
-        policy_rule = IdpCreatePolicyRuleRequest.from_dict(input_policy_dict)
+        policy_rule = main.IdpCreatePolicyRuleRequest.from_dict(input_policy_dict)
 
         # Convert back to dictionary
         policy_dict = policy_rule.to_dict()
