@@ -100,5 +100,5 @@ actions:
                 syncTime: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.lastSyncTime}
                 updated: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.updated}
                 updatedPolicyRules: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.updatedPolicyRules}
-            foundry_app_id: 65b967bf9164495591e849aad7ea62f2
+            foundry_app_id: ${{FOUNDRY_APP_ID}}
             remove_action_prefix: false
