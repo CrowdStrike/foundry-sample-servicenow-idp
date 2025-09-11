@@ -28,8 +28,7 @@ Target users include organizations that use both CrowdStrike IDP and ServiceNow 
     - ServiceNow instance URL
     - Service account credentials
 7. Configure Workflow parameters.
-8. Execute Initialize or Reset checkpoint-LatestSysUpdatedOn workflow
-9. Execute ServiceNow to IDP policy rules synchronizer workflow
+8. Execute ServiceNow to IDP policy rules synchronizer workflow
 
 ## 4. User Guide
 ### ServiceNow CMDB Table
@@ -61,7 +60,7 @@ Workflow configuration to be done during app installation.
 ![Workflow settings](wfSettings.png)
 
 ##### Initialize or Reset checkpoint-LatestSysUpdatedOn
-This workflow must be executed at least once after installation to establish the initial checkpoint. It can also be triggered manually to reset the checkpoint time when records need to be resynchronized from a specific point in time. The workflow is parametrized and the default checkpoint time is set to 1970-01-01 00:00:00 which can be updated before triggering this workflow.
+This workflow can be triggered manually to reset the checkpoint time when records need to be resynchronized from a specific point in time. The workflow is parametrized and the default checkpoint time is set to 1970-01-01 00:00:00 which can be updated before triggering this workflow.
 
 ##### ServiceNow to IDP policy rules synchronizer
 This workflow serves as the main execution engine of the application, orchestrating all artifacts to perform the synchronization process. Upon completion of each run, it writes a summary record to LogScale that can be leveraged to create NG-SIEM dashboards and alerts for monitoring synchronization status.
