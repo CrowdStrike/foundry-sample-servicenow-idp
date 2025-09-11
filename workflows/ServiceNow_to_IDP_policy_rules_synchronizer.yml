@@ -40,6 +40,15 @@ trigger:
         - create_variable_b321beaa
     event: Schedule
 actions:
+    UpdateVariable:
+        next:
+            - service_now_cmdb_table_api_23c0ead3
+        id: 6c6eab39063fa3b72d98c82af60deb8a
+        class: UpdateVariable
+        properties:
+            WorkflowCustomVariable:
+                v_latestSysUpdatedOn: '${data[''get_object_from_servicenow_idp_app_state_12f7153b.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn'']== null || data[''get_object_from_servicenow_idp_app_state_12f7153b.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn'']== "" ? "1970-01-01 00:00:00" : data[''get_object_from_servicenow_idp_app_state_12f7153b.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn'']}'
+        version_constraint: ~1
     add_object_to_servicenow_idp_app_state_1783d1b9:
         next:
             - write_to_log_repo_468fe687
@@ -61,10 +70,12 @@ actions:
                         description: Synchronization checkpoint storage
                         format: foundryCustomStorageObjectKey
                         type: string
+                    v_latestSysUpdatedOn:
+                        type: string
                 type: object
     get_object_from_servicenow_idp_app_state_12f7153b:
         next:
-            - service_now_cmdb_table_api_23c0ead3
+            - UpdateVariable
         id: collections.servicenow_idp_app_state.get
         properties:
             custom_storage_object_key: ${WorkflowCustomVariable.servicenowIdpAppState}
@@ -75,14 +86,14 @@ actions:
         properties:
             params:
                 query:
-                    sysparm_query: sys_updated_on>=${get_object_from_servicenow_idp_app_state_12f7153b.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn}
+                    sysparm_query: sys_updated_on>=${data['WorkflowCustomVariable.v_latestSysUpdatedOn']}
     transform_rules_aec4b131:
         next:
             - add_object_to_servicenow_idp_app_state_1783d1b9
         id: functions.servicenowToIdpPolicyRulesTransformer.transform_rules
         properties:
             lastSyncTime: ${get_object_from_servicenow_idp_app_state_12f7153b.CustomStorage.Collection_servicenow_idp_app_state.lastSyncTime}
-            latestSysUpdatedOn: ${get_object_from_servicenow_idp_app_state_12f7153b.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn}
+            latestSysUpdatedOn: ${data['WorkflowCustomVariable.v_latestSysUpdatedOn']}
             result:
                 result: ${service_now_cmdb_table_api_23c0ead3.API_Integration.Custom_service_now_cmdb.service_now_cmdb_table_api.body.result}
     write_to_log_repo_468fe687:
