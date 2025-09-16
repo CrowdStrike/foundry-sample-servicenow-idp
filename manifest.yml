@@ -1,5 +1,5 @@
-app_id: 
-name: ServiceNow CMDB Ingest For Identity Protection
+app_id: a8ec4647c9d24e5b8526419a46b4ee36
+name: ServiceNow CMDB Ingest For Identity Protection_2
 description: Synchronize ServiceNow Configuration Management Database (CMDB) Configuration rules with Identity Protection Policies
 logo: images/servicenow_logo.png
 vendor: ServiceNow
@@ -15,7 +15,7 @@ ui:
     dashboards: {}
     navigation: {}
 api_integrations:
-    - id: 
+    - id: 968ba36cefab4059b02390a2af8782ba
       name: service now cmdb
       description: ""
       path: api-integrations/servicenow_table_int_4.json
@@ -39,7 +39,7 @@ auth:
     permissions: {}
     roles: []
 functions:
-    - id: 
+    - id: ccefc79e73c9401680c3e58ad43b3545
       name: servicenowToIdpPolicyRulesTransformer
       config: {}
       description: Function translates ServiceNow data to IDP policy rules
@@ -54,29 +54,23 @@ functions:
           request_schema: schemas/transform_rules_request_schema.json
           response_schema: schemas/transform_rules_response_schema.json
           workflow_integration:
-            id: 
+            id: 525ab6ab4e374427a39d0ea067937c2f
             disruptive: false
             system_action: true
             tags: []
           permissions: []
       language: python
 workflows:
-    - id: 
-      name: ServiceNow to IDP policy rules synchronizer
+    - id: 0be6778342e141abbe8f68ba3063944b
+      name: ServiceNow to IDP policy rules synchronizer2
       path: workflows/ServiceNow_to_IDP_policy_rules_synchronizer.yml
       permissions: []
-    - id: 
-      name: Initialize or Reset checkpoint-LatestSysUpdatedOn
+    - id: 223ae0b5c8da4db6976ba757b2b682f4
+      name: Initialize or Reset checkpoint-LatestSysUpdatedOn2
       path: workflows/Initialize_or_Reset_checkpoint-LatestSysUpdatedOn.yml
       permissions: []
 parsers: []
 logscale:
     saved_searches: []
 lookup_files: []
-docs:
-    id: 
-    path: app_docs
-    entrypoint: README.md
-    links:
-        - servicenowRecords2.png
-        - wfSettings.png
+docs: {}

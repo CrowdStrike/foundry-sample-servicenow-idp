@@ -1,4 +1,4 @@
-name: ServiceNow to IDP policy rules synchronizer
+name: ServiceNow to IDP policy rules synchronizer2
 description: Synchronizes access rules from ServiceNow CMDB to IDP Policy rules.
 parameters:
     actions:
