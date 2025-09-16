@@ -13,9 +13,9 @@ from typing import Optional, Dict, Any, List
 from crowdstrike.foundry.function import Function, Request, Response, APIError
 from falconpy import IdentityProtection
 
-FUNC = Function.instance()
+func = Function.instance()
 
-@FUNC.handler(method='POST', path='/transform')
+@func.handler(method='POST', path='/transform')
 def transform_rules(request: Request, config: [dict[str, any], None], logger: Logger) -> Response:
     """
     Transform IDP policy rules by updating or creating rule conditions.
@@ -72,8 +72,8 @@ def _transform_rules(logger, request):
             status_code = 502
             break
 
-        copy_from_cmdb_response_to_idp_create_request(idp_create_rule_request.destination.entity_id,
-                                                      idp_create_rule_request.source_user.entity_id,
+        copy_from_cmdb_response_to_idp_create_request(idp_create_rule_request.source_user.entity_id,
+                                                      idp_create_rule_request.source_endpoint.entity_id,
                                                       access)
         rule_conditions = None
         # Get policy rule details
@@ -176,13 +176,14 @@ def update_idp_rule(rule_conditions, idp_create_rule_request, identity_protectio
     # Process rule conditions
     for condition in rule_conditions:
         # Copy from existing condition to idp create request
-        if 'destination' in condition:
-            if 'entityId' in condition['destination']:
-                add_to_idp_request_from_rule_condition(idp_create_rule_request.destination.entity_id,
-                                                       condition['destination']['entityId'])
-            if 'groupMembership' in condition['destination']:
-                add_to_idp_request_from_rule_condition(idp_create_rule_request.destination.group_membership,
-                                                       condition['destination']['groupMembership'])
+        if 'sourceEndpoint' in condition:
+            if 'entityId' in condition['sourceEndpoint']:
+                add_to_idp_request_from_rule_condition(idp_create_rule_request.source_endpoint.entity_id,
+                                                       condition['sourceEndpoint']['entityId'])
+            if 'groupMembership' in condition['sourceEndpoint']:
+                add_to_idp_request_from_rule_condition(idp_create_rule_request.source_endpoint.group_membership,
+                                                       condition['sourceEndpoint']['groupMembership'])
+
         if 'sourceUser' in condition:
             if 'entityId' in condition['sourceUser']:
                 add_to_idp_request_from_rule_condition(idp_create_rule_request.source_user.entity_id,
@@ -190,6 +191,13 @@ def update_idp_rule(rule_conditions, idp_create_rule_request, identity_protectio
             if 'groupMembership' in condition['sourceUser']:
                 add_to_idp_request_from_rule_condition(idp_create_rule_request.source_user.group_membership,
                                                        condition['sourceUser']['groupMembership'])
+        if 'destination' in condition:
+            if 'entityId' in condition['destination']:
+                add_to_idp_request_from_rule_condition(idp_create_rule_request.destination.entity_id,
+                                                       condition['destination']['entityId'])
+            if 'groupMembership' in condition['destination']:
+                add_to_idp_request_from_rule_condition(idp_create_rule_request.destination.group_membership,
+                                                       condition['destination']['groupMembership'])
 
     # Delete existing policy
     deleted_rules = identity_protection.delete_policy_rules(parameters={'ids': idp_policy_rule_id})
@@ -345,12 +353,12 @@ def get_idp_policy_rule_details(identity_protection, idp_policy_rule_id, logger,
     return rule_conditions, errs
 
 
-def copy_from_cmdb_response_to_idp_create_request(destination_entity_id, source_user_entity_id, entities):
+def copy_from_cmdb_response_to_idp_create_request(source_user_entity_id, source_endpoint_entity_id, entities):
     """
-    Copy the entities from the CMDB response to the create IDP policy rule request
+       Copy the entities from the CMDB response to the create IDP policy rule request
     """
-    destination_entity_id.include = merge_lists_unique_ordered(destination_entity_id.include, list(entities['host_guid']))
-    source_user_entity_id.exclude = merge_lists_unique_ordered(source_user_entity_id.exclude, list(entities['user_guid']))
+    source_endpoint_entity_id.exclude = merge_lists_unique_ordered(source_endpoint_entity_id.exclude, list(entities['host_guid']))
+    source_user_entity_id.include = merge_lists_unique_ordered(source_user_entity_id.include, list(entities['user_guid']))
 
 
 def add_to_idp_request_from_rule_condition(idp_request_entity, rule_entity):
@@ -586,4 +594,4 @@ class IdpCreatePolicyRuleRequest:
         }
 
 if __name__ == '__main__':
-    FUNC.run()
+    func.run()
