@@ -74,5 +74,10 @@
   "idpSimulationModeColumn": "u_idp_rule_simulation_mode",
   "idpTriggerColumn": "u_idp_rule_trigger",
   "idpTrigger": "u_idp_trigger",
-  "idpRuleNamePrefix": "ServiceNow_"
+  "idpRuleNamePrefix": "ServiceNow_",
+  "sysParamQuery": "sys_updated_on>=2025-05-12 18:53:31:00^ORDERBYsys_updated_on",
+  "sysParamLimit": 2,
+  "apiDefinitionId": "service now cmdb",
+  "apiOperationId": "GET__api_now_table_tablename",
+  "tableName": "u_test_server_access_data"
 }
