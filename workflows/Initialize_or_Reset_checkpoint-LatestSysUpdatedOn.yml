@@ -1,4 +1,4 @@
-name: Initialize or Reset checkpoint-LatestSysUpdatedOn2
+name: Initialize or Reset checkpoint-LatestSysUpdatedOn
 description: Initialize LastSyncTime and LatestSysUpdatedOn values in collection. This workflow can also be used to reset the checkpoint value of LatestSysUpdatedOn.
 provision_on_install: true
 trigger:

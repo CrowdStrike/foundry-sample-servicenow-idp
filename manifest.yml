@@ -1,5 +1,5 @@
-app_id: a8ec4647c9d24e5b8526419a46b4ee36
-name: ServiceNow CMDB Ingest For Identity Protection_2
+app_id:
+name: ServiceNow CMDB Ingest For Identity Protection
 description: Synchronize ServiceNow Configuration Management Database (CMDB) Configuration rules with Identity Protection Policies
 logo: images/servicenow_logo.png
 vendor: ServiceNow
@@ -15,7 +15,7 @@ ui:
     dashboards: {}
     navigation: {}
 api_integrations:
-    - id: 968ba36cefab4059b02390a2af8782ba
+    - id:
       name: service now cmdb
       description: ""
       path: api-integrations/servicenow_table_int_4.json
@@ -39,34 +39,35 @@ auth:
     permissions: {}
     roles: []
 functions:
-    - id: ccefc79e73c9401680c3e58ad43b3545
+    - id:
       name: servicenowToIdpPolicyRulesTransformer
       config: {}
       description: Function translates ServiceNow data to IDP policy rules
       path: functions/servicenowToIdpPolicyRulesTransformer
       environment_variables: {}
+      max_exec_duration_seconds: 900
       handlers:
-        - name: transform_rules
-          description: This Function translates ServiceNow data to IDP policy rules
+        - name: get_table_data_transform_rules
+          description: This Function fetch data from ServieNow table and translates to IDP policy rules
           method: POST
-          api_path: /transform
+          api_path: /get-data-transform
           payload_type: ""
           request_schema: schemas/transform_rules_request_schema.json
           response_schema: schemas/transform_rules_response_schema.json
           workflow_integration:
-            id: 525ab6ab4e374427a39d0ea067937c2f
+            id:
             disruptive: false
             system_action: true
             tags: []
           permissions: []
       language: python
 workflows:
-    - id: 0be6778342e141abbe8f68ba3063944b
-      name: ServiceNow to IDP policy rules synchronizer2
-      path: workflows/ServiceNow_to_IDP_policy_rules_synchronizer.yml
+    - id:
+      name: ServiceNow data to IDP policy rules synchronizer
+      path: workflows/ServiceNow_data_to_IDP_policy_rules_synchronizer.yml
       permissions: []
-    - id: 223ae0b5c8da4db6976ba757b2b682f4
-      name: Initialize or Reset checkpoint-LatestSysUpdatedOn2
+    - id:
+      name: Initialize or Reset checkpoint-LatestSysUpdatedOn
       path: workflows/Initialize_or_Reset_checkpoint-LatestSysUpdatedOn.yml
       permissions: []
 parsers: []

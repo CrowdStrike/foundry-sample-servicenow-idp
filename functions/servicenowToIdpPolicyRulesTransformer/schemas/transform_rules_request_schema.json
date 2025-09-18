@@ -1,9 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema",
   "properties": {
-    "result": {
-      "type": "object"
-    },
     "cmdbAppNameColumn": {
       "type": "string",
       "description": "App name Column in ServiceNow CMDB"
@@ -47,9 +44,29 @@
     "idpRuleNamePrefix": {
       "type": "string",
       "description": "Prefix for IDP Policy rule name"
+    },
+    "apiDefinitionId": {
+      "type": "string",
+      "description": "API integration definition ID"
+    },
+    "apiOperationId": {
+      "type": "string",
+      "description": "API integration operation ID"
+    },
+    "tableName": {
+      "type": "string",
+      "description": "ServiceNow table name"
+    },
+    "sysParamQuery": {
+      "type": "string",
+      "description": "An encoded query string used to filter the results"
+    },
+    "sysParamLimit": {
+      "type": "string",
+      "description": "The maximum number of results returned per page (default: 500)"
     }
   },
   "type": "object",
   "description": "This generated schema may need tweaking. In particular format fields are attempts at matching workflow field types but may not be correct.",
-  "required": ["cmdbAppNameColumn", "userGuidColumn", "hostGuidColumn", "sysUpdatedOnColumn", "idpEnabledColumn", "idpSimulationModeColumn", "idpActionColumn", "idpTriggerColumn", "idpRuleNamePrefix"]
+  "required": ["cmdbAppNameColumn", "userGuidColumn", "hostGuidColumn", "sysUpdatedOnColumn", "idpEnabledColumn", "idpSimulationModeColumn", "idpActionColumn", "idpTriggerColumn", "idpRuleNamePrefix", "apiDefinitionId", "apiOperationId", "tableName"]
 }
