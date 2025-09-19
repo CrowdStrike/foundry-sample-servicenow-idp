@@ -115,7 +115,7 @@ def fetch_and_process_servicenow_records(request, logger=None):
 
         return transform_response
 
-    except Exception as e:
+    except (ValueError, TypeError, AttributeError) as e:
         error_msg = f"Error in batch processing: {str(e)}"
         logger.error(f"error_msg: {e}")
         response_body = initialize_response_body()
@@ -390,8 +390,9 @@ def parse_link_header_and_get_next_page_url(link_header, logger):
 
         return next_page_url, last_page_url
 
-    except Exception as e:
-        return e
+    except (ValueError, re.error) as e:
+        logger.error(f"Error parsing link header: {e}")
+        return None, None
 
 
 def get_current_time():
