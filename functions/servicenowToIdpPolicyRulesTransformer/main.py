@@ -13,16 +13,16 @@ from logging import Logger
 from typing import Optional, Dict, Any, List
 from urllib.parse import urlparse, parse_qs
 
-from crowdstrike.foundry.function import Function, Request, Response, APIError
+from crowdstrike.foundry.function import Function, Request, Response
 from falconpy import IdentityProtection
 from falconpy import APIIntegrations
 
-func = Function.instance()
+FUNC = Function.instance()
 
 STATUS_PENDING = "pending"
 STATUS_COMPLETED = "completed"
 
-@func.handler(method='POST', path='/get-data-transform')
+@FUNC.handler(method='POST', path='/get-data-transform')
 def get_table_data_transform_rules(request: Request, config: Optional[Dict[str, Any]], logger: Logger) -> Response:
     """
     Get data from ServiceNow CMDB table and transform IDP policy rules by updating or creating rule conditions.
@@ -71,7 +71,10 @@ def fetch_and_process_servicenow_records(request, logger=None):
         response_body = initialize_response_body()
 
         if not all([definition_id, operation_id, table_name, latest_sys_updated_on]):
-            response_body['errors']['description'] = "Missing required configuration: apiIntegrationDefinitionId, apiIntegrationOperationId, tableName, latestSysUpdatedOn"
+            response_body['errors']['description'] = (
+                "Missing required configuration: apiIntegrationDefinitionId, "
+                "apiIntegrationOperationId, tableName, latestSysUpdatedOn"
+            )
             return Response(body=response_body, code=400)
 
         # if next_page_url available, get next offset
@@ -86,7 +89,9 @@ def fetch_and_process_servicenow_records(request, logger=None):
             response_body['errors']['description'] = error_msg
             return Response(body=response_body, code=response["status_code"])
 
-        next_page_url, last_page_url = parse_link_header_and_get_next_page_url(response.get('headers', {}).get('Link', ''), logger)
+        next_page_url, last_page_url = parse_link_header_and_get_next_page_url(
+            response.get('headers', {}).get('Link', ''), logger
+        )
 
         current_batch = response.get('body', {}).get('result', [])
         logger.info(f"Processing batch of {len(current_batch)} records")
@@ -103,7 +108,10 @@ def fetch_and_process_servicenow_records(request, logger=None):
             # if last page mark status COMPLETED
             transform_response.body['serviceNowRecordsProcessStatus'] = STATUS_COMPLETED
 
-        logger.info(f"Total records processed in the batch: {len(current_batch)}; \nResponse body to return: {transform_response}")
+        logger.info(
+            f"Total records processed in the batch: {len(current_batch)}; "
+            f"\nResponse body to return: {transform_response}"
+        )
 
         return transform_response
 
@@ -116,8 +124,25 @@ def fetch_and_process_servicenow_records(request, logger=None):
 
 
 def get_servicenow_data(logger, definition_id, operation_id, table_name, query, limit, offset):
+    """
+    Get ServiceNow data using API Integration.
+    
+    Args:
+        logger: Logger instance
+        definition_id: API Integration definition ID
+        operation_id: API Integration operation ID
+        table_name: ServiceNow table name
+        query: Query parameters
+        limit: Limit per page
+        offset: Offset for pagination
+        
+    Returns:
+        Response from ServiceNow API
+    """
     logger.info(
-        f"getting servicenow data using API-Integration. table_name:{table_name}, query: {query}, limit:{limit}, offset:{offset} ")
+        f"getting servicenow data using API-Integration. table_name:{table_name}, "
+        f"query: {query}, limit:{limit}, offset:{offset}"
+    )
 
     # Use the APIIntegrations client to call ServiceNow Table API
     api = APIIntegrations()
@@ -746,4 +771,4 @@ class IdpCreatePolicyRuleRequest:
 
 
 if __name__ == '__main__':
-    func.run()
+    FUNC.run()
