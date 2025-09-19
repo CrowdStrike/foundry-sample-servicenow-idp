@@ -1,6 +1,7 @@
 """
 This test validates function
 """
+# pylint: disable=too-many-public-methods
 import importlib
 import json
 import logging
