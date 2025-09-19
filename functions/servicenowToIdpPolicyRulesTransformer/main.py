@@ -19,11 +19,13 @@ from falconpy import APIIntegrations
 
 func = Function.instance()
 
+STATUS_PENDING = "pending"
+STATUS_COMPLETED = "completed"
 
 @func.handler(method='POST', path='/get-data-transform')
 def get_table_data_transform_rules(request: Request, config: Optional[Dict[str, Any]], logger: Logger) -> Response:
     """
-    Transform IDP policy rules by updating or creating rule conditions.
+    Get data from ServiceNow CMDB table and transform IDP policy rules by updating or creating rule conditions.
     Gets IDP policy rules and updates them if present else creates a new IDP policy rule.
 
     Args:
@@ -42,8 +44,79 @@ def get_table_data_transform_rules(request: Request, config: Optional[Dict[str, 
     return fetch_and_process_servicenow_records(request, logger)
 
 
+def fetch_and_process_servicenow_records(request, logger=None):
+    """
+    Fetch ServiceNow data using Link header pagination and process each batch immediately.
+    """
+    try:
+        # API-Integration definitionId
+        definition_id = request.body.get('apiDefinitionId', "service now cmdb")
+        # API-Integration operationID
+        operation_id = request.body.get('apiOperationId', "GET__api_now_table_tablename")
+        # ServiceNow tableName
+        table_name = request.body.get('tableName', "")
+        # latestSysUpdatedOn to be used to get new records
+        latest_sys_updated_on = request.body.get('latestSysUpdatedOn', "")
+        # record filter query. by default it's ordered by 'sys_updated_on' field
+        query = request.body.get('sysParamQuery', f"sys_updated_on>={request.body.get('latestSysUpdatedOn', "")}")
+        query +="^ORDERBYsys_updated_on"
+        # per page records limit
+        limit = request.body.get('sysParamLimit', 100)
+        # next page URL
+        request_next_page_url = request.body.get('serviceNowNextPageURL', None)
+
+        offset = 0
+        offset_param = 'sysparm_offset'
+
+        response_body = initialize_response_body()
+
+        if not all([definition_id, operation_id, table_name, latest_sys_updated_on]):
+            response_body['errors']['description'] = "Missing required configuration: apiIntegrationDefinitionId, apiIntegrationOperationId, tableName, latestSysUpdatedOn"
+            return Response(body=response_body, code=400)
+
+        # if next_page_url available, get next offset
+        if request_next_page_url:
+            offset = get_query_param_from_url(request_next_page_url, offset_param)
+
+        response = get_servicenow_data(logger, definition_id, operation_id, table_name, query, limit, offset)
+
+        if response["status_code"] != 200:
+            error_msg = f"ServiceNow API error: {response.get("errors", {}).get("message", "Unknown error")}"
+            logger.error(error_msg)
+            response_body['errors']['description'] = error_msg
+            return Response(body=response_body, code=response["status_code"])
+
+        next_page_url, last_page_url = parse_link_header_and_get_next_page_url(response.get('headers', {}).get('Link', ''), logger)
+
+        current_batch = response.get('body', {}).get('result', [])
+        logger.info(f"Processing batch of {len(current_batch)} records")
+
+        # Process batch
+        transform_response = _transform_rules(logger, request, current_batch, response_body)
+
+        if next_page_url:
+            # if preset, update next page url in response body
+            transform_response.body['serviceNowNextPageURL']= next_page_url
+
+        # Set status completed if nextURL and lastURL is equal or nextURL falsy
+        if request_next_page_url == last_page_url or not next_page_url:
+            # if last page mark status COMPLETED
+            transform_response.body['serviceNowRecordsProcessStatus'] = STATUS_COMPLETED
+
+        logger.info(f"Total records processed in the batch: {len(current_batch)}; \nResponse body to return: {transform_response}")
+
+        return transform_response
+
+    except Exception as e:
+        error_msg = f"Error in batch processing: {str(e)}"
+        logger.error(f"error_msg: {e}")
+        response_body = initialize_response_body()
+        response_body['errors']['description'] = error_msg
+        return Response(body=response_body, code=500)
+
+
 def get_servicenow_data(logger, definition_id, operation_id, table_name, query, limit, offset):
-    logger.debug(
+    logger.info(
         f"getting servicenow data using API-Integration. table_name:{table_name}, query: {query}, limit:{limit}, offset:{offset} ")
 
     # Use the APIIntegrations client to call ServiceNow Table API
@@ -69,103 +142,6 @@ def get_servicenow_data(logger, definition_id, operation_id, table_name, query, 
     return response
 
 
-def fetch_and_process_servicenow_records(request, logger=None):
-    """
-    Fetch ServiceNow data using Link header pagination and process each batch immediately.
-    """
-    try:
-        # definition_id = request.body.get('apiDefinitionId', "service now cmdb")
-        # operation_id = request.body.get('apiIntegrationOperationId', "GET__api_now_table_tablename")
-        # table_name = request.body.get('tableName', "u_test_server_access_data")
-        # query = request.body.get('sysParamQuery', "sys_updated_on>=2025-09-12 18:00:00^ORDERBYsys_updated_on")
-        # limit = request.body.get('sysParamLimit', "20")
-
-        definition_id = request.body.get('apiDefinitionId', "service now cmdb")
-        operation_id = request.body.get('apiOperationId', "GET__api_now_table_tablename")
-        table_name = request.body.get('tableName', "")
-        latest_sys_updated_on = request.body.get('latestSysUpdatedOn', "")
-        query = request.body.get('sysParamQuery',
-                                 f"sys_updated_on>={request.body.get('latestSysUpdatedOn', "")}^ORDERBYsys_updated_on")
-        limit = request.body.get('sysParamLimit', 500)
-
-        offset = 0
-        offset_param = 'sysparm_offset'
-        next_url = None
-        last_url = None
-        page_count = 0
-        total_processed = 0
-        response_body = initialize_response_body()
-        is_last_batch = False
-        transform_response = {}
-
-        if not all([definition_id, operation_id, table_name, latest_sys_updated_on]):
-            response_body['errors']['description'] = "Missing required configuration: apiIntegrationDefinitionId, apiIntegrationOperationId, tableName, latestSysUpdatedOn"
-            return Response(body=response_body, code=400)
-
-        # Start with initial request
-        while True:
-            page_count += 1
-
-            logger.info(f"Fetching and processing ServiceNow data - page {page_count}")
-
-            # if next_url available, get next offset
-            if next_url:
-                offset = get_query_param_from_url(next_url, offset_param)
-
-            response = get_servicenow_data(logger, definition_id, operation_id, table_name, query, limit, offset)
-
-            if response["status_code"] != 200:
-                error_msg = f"ServiceNow API error: {response.get("errors", {}).get("message", "Unknown error")}"
-                logger.error(error_msg)
-                response_body['errors']['description'] = error_msg
-                return Response(body=response_body, code=response["status_code"])
-
-            current_batch = response.get('body', {}).get('result', [])
-            total_processed += len(current_batch)
-
-            logger.info(f"Processing batch of {len(current_batch)} records")
-
-            # Process batch
-            transform_response = _transform_rules(logger, request, current_batch, response_body)
-
-            # if last batch, exit loop
-            if is_last_batch:
-                logger.info(f"Completed processing final batch, total records processed: {total_processed}")
-                break
-
-            logger.info(f"Completed processing batch {page_count}, total records processed: {total_processed}")
-
-            link_header = response.get('headers', {}).get('Link', '')
-            if link_header:
-                logger.info(f"all Links: {link_header}")
-
-                parsed_links = parse_link_header(link_header)
-
-                next_url = parsed_links.get('next')
-                last_url = parsed_links.get('last')
-
-                logger.debug(f"next_url: {next_url}")
-                logger.debug(f"last_url: {last_url}")
-
-                if next_url == last_url:
-                    is_last_batch = True
-            else:
-                logger.info(f"Links response header not present; means current page has all the new records")
-                break
-
-        logger.info(f"Completed processing all batches. Total pages: {page_count}, total records: {total_processed}")
-        logger.info(f"Response body to return: {transform_response}")
-
-        return transform_response
-
-    except Exception as e:
-        error_msg = f"Error in batch processing: {str(e)}"
-        logger.error(f"error_msg: {e}")
-        response_body = initialize_response_body()
-        response_body['errors']['description'] = error_msg
-        return Response(body=response_body, code=500)
-
-
 def _transform_rules(logger, request, result_data, response_body):
     transform_request = TransformRequest.from_request(request.body)
     transform_request.result = result_data
@@ -174,7 +150,6 @@ def _transform_rules(logger, request, result_data, response_body):
     identity_protection = IdentityProtection(access_token=request.access_token)
     # To test locally
     # identity_protection = IdentityProtection(client_id="client-id-value", client_secret="client-secret-value")
-    # identity_protection = IdentityProtection(client_id="4b398c11d871422cb2d83bd1539659bd", client_secret="FfjIMxkZET7Wmg4J3C65hsoP2tible10VDL8B9KN")
 
     status_code = 200
     merged_result = merge_apps_access(logger, transform_request, response_body)
@@ -284,6 +259,8 @@ def initialize_response_body() -> dict:
         "updated": 0,
         "updatedPolicyRules": [],
         "ignoredSysIdCount": 0,
+        "serviceNowNextPageURL" : "",
+        "serviceNowRecordsProcessStatus": STATUS_PENDING, # possible values pending and completed
         "errors": {
             "description": "",
             "errs": []
@@ -365,18 +342,29 @@ def get_query_param_from_url(url, query_param_key):
     return query_params.get(query_param_key, [])
 
 
-def parse_link_header(link_header):
-    """Parse Link header to extract next and last URLs"""
+def parse_link_header_and_get_next_page_url(link_header, logger):
+    """Parse Link header to extract URLs and return URLs"""
     try:
         links = {}
+        next_page_url = None
+        last_page_url = None
 
-        for link in link_header.split(','):
-            match = re.match(r'<([^>]+)>;\s*rel="([^"]+)"', link.strip())
-            if match:
-                url, rel = match.groups()
-                links[rel] = url
+        if link_header:
+            for link in link_header.split(','):
+                match = re.match(r'<([^>]+)>;\s*rel="([^"]+)"', link.strip())
+                if match:
+                    url, rel = match.groups()
+                    links[rel] = url
 
-        return links
+        if links:
+            logger.info(f"all Links: {links}")
+            next_page_url = links.get('next')
+            last_page_url = links.get('last')
+        else:
+            logger.info("Links response header not present; means current page has all the new records")
+
+        return next_page_url, last_page_url
+
     except Exception as e:
         return e
 
@@ -486,7 +474,7 @@ def get_idp_policy_rule_details(identity_protection, idp_policy_rule_id, logger,
         if len(idp_policy_rule_id) > 0:
             if len(idp_policy_rule_id) > 1:
                 logger.info(
-                    "More than one policy rule Id is provided - " + idp_policy_rule_id + ". Using the first one "
+                    f"More than one policy rule Id is provided - {idp_policy_rule_id}. Using the first one "
                     + idp_policy_rule_id[0])
 
             idp_policy_rule_id = idp_policy_rule_id[0]
@@ -565,7 +553,11 @@ class TransformRequest:
     @classmethod
     def from_request(cls, request_body: Dict[str, Any]) -> 'TransformRequest':
         """Create a RequestConfig instance from a request body dictionary."""
+        result_data = {}
+        if 'result' in request_body and 'result' in request_body['result']:
+            result_data = request_body['result']['result']
         return cls(
+            result = result_data,
             latest_sys_updated_on=request_body.get('latestSysUpdatedOn', ""),
             cmdb_app_name_column=request_body.get('cmdbAppNameColumn'),
             user_guid_column=request_body.get('userGuidColumn'),
