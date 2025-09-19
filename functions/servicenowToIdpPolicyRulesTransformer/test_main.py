@@ -354,7 +354,7 @@ class FnTestCase(unittest.TestCase):
         }
 
         # Mock an exception during API call
-        mock_get_data.side_effect = Exception("Connection timeout")
+        mock_get_data.side_effect = ValueError("Connection timeout")
 
         response = main.fetch_and_process_servicenow_records(request, self.logger)
 
