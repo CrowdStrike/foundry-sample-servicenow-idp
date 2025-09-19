@@ -45,7 +45,6 @@ functions:
       description: Function translates ServiceNow data to IDP policy rules
       path: functions/servicenowToIdpPolicyRulesTransformer
       environment_variables: {}
-      max_exec_duration_seconds: 900
       handlers:
         - name: get_table_data_transform_rules
           description: This Function fetch data from ServieNow table and translates to IDP policy rules
@@ -61,6 +60,7 @@ functions:
             tags: []
           permissions: []
       language: python
+      max_exec_duration_seconds: 900
 workflows:
     - id:
       name: ServiceNow data to IDP policy rules synchronizer

@@ -64,6 +64,10 @@
     "sysParamLimit": {
       "type": "string",
       "description": "The maximum number of results returned per page (default: 500)"
+    },
+    "serviceNowNextPageURL": {
+      "type": "string",
+      "description": "ServiceNow next page URL"
     }
   },
   "type": "object",
