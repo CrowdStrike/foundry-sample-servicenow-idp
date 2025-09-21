@@ -1,4 +1,4 @@
-app_id:
+app_id: 
 name: ServiceNow CMDB Ingest For Identity Protection
 description: Synchronize ServiceNow Configuration Management Database (CMDB) Configuration rules with Identity Protection Policies
 logo: images/servicenow_logo.png
@@ -15,7 +15,7 @@ ui:
     dashboards: {}
     navigation: {}
 api_integrations:
-    - id:
+    - id: 
       name: service now cmdb
       description: ""
       path: api-integrations/servicenow_table_int_4.json
@@ -39,7 +39,7 @@ auth:
     permissions: {}
     roles: []
 functions:
-    - id:
+    - id: 
       name: servicenowToIdpPolicyRulesTransformer
       config: {}
       description: Function translates ServiceNow data to IDP policy rules
@@ -47,14 +47,14 @@ functions:
       environment_variables: {}
       handlers:
         - name: get_table_data_transform_rules
-          description: This Function fetch data from ServieNow table and translates to IDP policy rules
+          description: This Function fetches data from ServieNow table and translates to IDP policy rules
           method: POST
           api_path: /get-data-transform
           payload_type: ""
           request_schema: schemas/transform_rules_request_schema.json
           response_schema: schemas/transform_rules_response_schema.json
           workflow_integration:
-            id:
+            id: 
             disruptive: false
             system_action: true
             tags: []
@@ -62,11 +62,11 @@ functions:
       language: python
       max_exec_duration_seconds: 900
 workflows:
-    - id:
-      name: ServiceNow data to IDP policy rules synchronizer
-      path: workflows/ServiceNow_data_to_IDP_policy_rules_synchronizer.yml
+    - id: 
+      name: ServiceNow to IDP policy rules synchronizer
+      path: workflows/ServiceNow_to_IDP_policy_rules_synchronizer.yml
       permissions: []
-    - id:
+    - id: 
       name: Initialize or Reset checkpoint-LatestSysUpdatedOn
       path: workflows/Initialize_or_Reset_checkpoint-LatestSysUpdatedOn.yml
       permissions: []
@@ -74,4 +74,10 @@ parsers: []
 logscale:
     saved_searches: []
 lookup_files: []
-docs: {}
+docs:
+    id: 
+    path: app_docs
+    entrypoint: README.md
+    links:
+        - servicenowRecords2.png
+        - wfSettings.png
