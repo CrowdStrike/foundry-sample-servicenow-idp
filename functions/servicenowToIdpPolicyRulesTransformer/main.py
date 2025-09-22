@@ -105,6 +105,12 @@ def fetch_and_process_servicenow_records(request, logger=None):
         # Process batch
         transform_response = _transform_rules(logger, request, current_batch, response_body)
 
+        if transform_response.code!= 200:
+            transform_response.body['serviceNowRecordsProcessStatus'] = Status.FAILED
+            logger.error(f"Failed to transform to IDP rules; response: {transform_response}")
+            return transform_response
+
+
         if next_page_url:
             # if preset, update next page url in response body
             transform_response.body['serviceNowNextPageURL']= next_page_url
@@ -113,6 +119,7 @@ def fetch_and_process_servicenow_records(request, logger=None):
         if request_next_page_url == last_page_url or not next_page_url:
             # if last page mark status COMPLETED
             transform_response.body['serviceNowRecordsProcessStatus'] = Status.COMPLETED
+            logger.info(f"Record processing done. Setting 'serviceNowRecordsProcessStatus' {Status.COMPLETED}")
 
         logger.info(
             f"Total records processed in the batch: {len(current_batch)}; "
