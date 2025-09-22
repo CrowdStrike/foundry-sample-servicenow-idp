@@ -267,6 +267,7 @@ class FnTestCase(unittest.TestCase):
         # Mock transform response
         mock_transform_response = MagicMock()
         mock_transform_response.body = {}
+        mock_transform_response.code = 200
         mock_transform.return_value = mock_transform_response
 
         response = main.fetch_and_process_servicenow_records(request, self.logger)
@@ -308,6 +309,7 @@ class FnTestCase(unittest.TestCase):
         # Mock transform response
         mock_transform_response = MagicMock()
         mock_transform_response.body = {}
+        mock_transform_response.code = 200
         mock_transform.return_value = mock_transform_response
 
         response = main.fetch_and_process_servicenow_records(request, self.logger)
