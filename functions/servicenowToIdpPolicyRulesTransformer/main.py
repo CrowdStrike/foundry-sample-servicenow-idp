@@ -121,7 +121,7 @@ def fetch_and_process_servicenow_records(request, logger=None):
 
         return transform_response
 
-    except (ValueError, TypeError, AttributeError, Exception) as e:
+    except (ValueError, TypeError, AttributeError) as e:
         error_msg = f"Error in processing records: {str(e)}"
         logger.error(f"error_msg: {e}")
         response_body = initialize_response_body()
@@ -777,7 +777,8 @@ class IdpCreatePolicyRuleRequest:
             }
         }
 
-class Status:
+class Status:  # pylint: disable=too-few-public-methods
+    """Constants for ServiceNow record processing status."""
     PENDING = "pending"
     FAILED = "failed"
     COMPLETED = "completed"
