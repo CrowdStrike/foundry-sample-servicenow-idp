@@ -338,7 +338,7 @@ class FnTestCase(unittest.TestCase):
         response = main.fetch_and_process_servicenow_records(request, self.logger)
 
         self.assertEqual(response.code, 500)
-        self.assertIn("ServiceNow API error: Internal Server Error", response.body['errors']['description'])
+        self.assertIn("Failed to get ServiceNow table data using API-Integration", response.body['errors']['description'])
         mock_transform.assert_not_called()
 
     @patch('main.get_servicenow_data')
@@ -359,7 +359,7 @@ class FnTestCase(unittest.TestCase):
         response = main.fetch_and_process_servicenow_records(request, self.logger)
 
         self.assertEqual(response.code, 500)
-        self.assertIn("Error in batch processing: Connection timeout", response.body['errors']['description'])
+        self.assertIn("Error in processing records: Connection timeout", response.body['errors']['description'])
         mock_transform.assert_not_called()
 
     @patch('main.get_servicenow_data')
