@@ -108,9 +108,9 @@ loops:
                     apiDefinitionId: service now cmdb
                     apiOperationId: GET__api_now_table_tablename
                     lastSyncTime: ${data['GetObjectFromServicenowIdpAppState.CustomStorage.Collection_servicenow_idp_app_state.lastSyncTime']}
-                    latestSysUpdatedOn: ${data['GetObjectFromServicenowIdpAppState.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn']}
+                    latestSysUpdatedOn: ${data['WorkflowCustomVariable.v_latestSysUpdatedOn']}
                     serviceNowNextPageURL: ${data['WorkflowCustomVariable.serviceNowNextPageURL']}
-                    sysParamQuery: sys_updated_on>=${data['GetObjectFromServicenowIdpAppState.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn']}
+                    sysParamQuery: sys_updated_on>=${data['WorkflowCustomVariable.v_latestSysUpdatedOn']}
                 version_constraint: ~0
             UpdateVariable2:
                 id: 6c6eab39063fa3b72d98c82af60deb8a
