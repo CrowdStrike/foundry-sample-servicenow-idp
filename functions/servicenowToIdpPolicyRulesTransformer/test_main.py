@@ -313,7 +313,7 @@ class FnTestCase(unittest.TestCase):
         response = main.fetch_and_process_servicenow_records(request, self.logger)
 
         # Verify status is marked as COMPLETED when last page reached
-        self.assertEqual(response.body['serviceNowRecordsProcessStatus'], main.STATUS_COMPLETED)
+        self.assertEqual(response.body['serviceNowRecordsProcessStatus'], main.Status.COMPLETED)
 
     @patch('main.get_servicenow_data')
     @patch('main._transform_rules')
@@ -407,7 +407,7 @@ class FnTestCase(unittest.TestCase):
         }
 
         self.assertEqual(set(response_body.keys()), expected_keys)
-        self.assertEqual(response_body['serviceNowRecordsProcessStatus'], main.STATUS_PENDING)
+        self.assertEqual(response_body['serviceNowRecordsProcessStatus'], main.Status.PENDING)
         self.assertEqual(response_body['deleted'], 0)
         self.assertEqual(response_body['updated'], 0)
         self.assertEqual(response_body['new'], 0)
@@ -898,6 +898,7 @@ class FnTestCase(unittest.TestCase):
         request = Request()
         request.body = {
             'apiDefinitionId': 'test_def',
+            'apiOperationId': 'test_op',
             'tableName': 'test_table',
             'latestSysUpdatedOn': '2025-05-12 18:53:31'
         }
