@@ -19,8 +19,8 @@ from falconpy import APIIntegrations
 
 FUNC = Function.instance()
 
-STATUS_PENDING = "pending"
-STATUS_COMPLETED = "completed"
+# constant
+OFFSET_PARAM_KEY = 'sysparm_offset'
 
 @FUNC.handler(method='POST', path='/get-data-transform')
 def get_table_data_transform_rules(request: Request, config: Optional[Dict[str, Any]], logger: Logger) -> Response:
@@ -50,23 +50,24 @@ def fetch_and_process_servicenow_records(request, logger=None):
     """
     try:
         # API-Integration definitionId
-        definition_id = request.body.get('apiDefinitionId', "service now cmdb")
+        definition_id = request.body.get('apiDefinitionId', "")
         # API-Integration operationID
-        operation_id = request.body.get('apiOperationId', "GET__api_now_table_tablename")
+        operation_id = request.body.get('apiOperationId', "")
         # ServiceNow tableName
         table_name = request.body.get('tableName', "")
         # latestSysUpdatedOn to be used to get new records
         latest_sys_updated_on = request.body.get('latestSysUpdatedOn', "")
-        # record filter query. by default it's ordered by 'sys_updated_on' field
-        query = request.body.get('sysParamQuery', f"sys_updated_on>={request.body.get('latestSysUpdatedOn', "")}")
+
+        # record filter query. by default, it's ordered by 'sys_updated_on' field
+        query = request.body.get('sysParamQuery', f"sys_updated_on>={latest_sys_updated_on}")
         query +="^ORDERBYsys_updated_on"
+
         # per page records limit
         limit = request.body.get('sysParamLimit', 100)
         # next page URL
         request_next_page_url = request.body.get('serviceNowNextPageURL', None)
 
         offset = 0
-        offset_param = 'sysparm_offset'
 
         response_body = initialize_response_body()
 
@@ -79,14 +80,19 @@ def fetch_and_process_servicenow_records(request, logger=None):
 
         # if next_page_url available, get next offset
         if request_next_page_url:
-            offset = get_query_param_from_url(request_next_page_url, offset_param)
+            offset = get_query_param_from_url(request_next_page_url, OFFSET_PARAM_KEY)
 
         response = get_servicenow_data(logger, definition_id, operation_id, table_name, query, limit, offset)
 
         if response["status_code"] != 200:
-            error_msg = f"ServiceNow API error: {response.get("errors", {}).get("message", "Unknown error")}"
-            logger.error(error_msg)
+            body = response.get("body", {})
+            error_msg = "Failed to get ServiceNow table data using API-Integration"
+            logger.error(f"{error_msg}; response body: {body}")
+
+            errors = body.get("errors", [])
             response_body['errors']['description'] = error_msg
+            response_body['errors']['errs'] = errors
+            response_body['serviceNowRecordsProcessStatus'] = Status.FAILED
             return Response(body=response_body, code=response["status_code"])
 
         next_page_url, last_page_url = parse_link_header_and_get_next_page_url(
@@ -106,7 +112,7 @@ def fetch_and_process_servicenow_records(request, logger=None):
         # Set status completed if nextURL and lastURL is equal or nextURL falsy
         if request_next_page_url == last_page_url or not next_page_url:
             # if last page mark status COMPLETED
-            transform_response.body['serviceNowRecordsProcessStatus'] = STATUS_COMPLETED
+            transform_response.body['serviceNowRecordsProcessStatus'] = Status.COMPLETED
 
         logger.info(
             f"Total records processed in the batch: {len(current_batch)}; "
@@ -115,11 +121,12 @@ def fetch_and_process_servicenow_records(request, logger=None):
 
         return transform_response
 
-    except (ValueError, TypeError, AttributeError) as e:
-        error_msg = f"Error in batch processing: {str(e)}"
+    except (ValueError, TypeError, AttributeError, Exception) as e:
+        error_msg = f"Error in processing records: {str(e)}"
         logger.error(f"error_msg: {e}")
         response_body = initialize_response_body()
         response_body['errors']['description'] = error_msg
+        response_body['serviceNowRecordsProcessStatus'] = Status.FAILED
         return Response(body=response_body, code=500)
 
 
@@ -285,7 +292,7 @@ def initialize_response_body() -> dict:
         "updatedPolicyRules": [],
         "ignoredSysIdCount": 0,
         "serviceNowNextPageURL" : "",
-        "serviceNowRecordsProcessStatus": STATUS_PENDING, # possible values pending and completed
+        "serviceNowRecordsProcessStatus": Status.PENDING, # possible values pending and completed
         "errors": {
             "description": "",
             "errs": []
@@ -770,6 +777,10 @@ class IdpCreatePolicyRuleRequest:
             }
         }
 
+class Status:
+    PENDING = "pending"
+    FAILED = "failed"
+    COMPLETED = "completed"
 
 if __name__ == '__main__':
     FUNC.run()
