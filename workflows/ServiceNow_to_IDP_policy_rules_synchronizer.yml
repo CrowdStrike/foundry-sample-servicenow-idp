@@ -47,9 +47,11 @@ actions:
             variable_schema:
                 properties:
                     serviceNowNextPageURL:
+                        description: ServiceNow next page URL
                         type: string
                     serviceNowRecordsProcessStatus:
-                        default: PENDING
+                        default: pending
+                        description: ServiceNow records process status. Possible value pending, completed or failed
                         type: string
                     servicenowIdpAppState:
                         default: servicenow_idp_app_state
@@ -78,12 +80,12 @@ actions:
         version_constraint: ~1
 loops:
     Loop:
-        display: While serviceNowRecordsProcessStatus is equal to pending Or serviceNowRecordsProcessStatus is equal to PENDING
+        display: While serviceNowRecordsProcessStatus is equal to pending
         for:
             input: ""
-            condition: (WorkflowCustomVariable.serviceNowRecordsProcessStatus:'pending'),(WorkflowCustomVariable.serviceNowRecordsProcessStatus:'PENDING')
+            condition: WorkflowCustomVariable.serviceNowRecordsProcessStatus:'pending'
             condition_display:
-                - '[["serviceNowRecordsProcessStatus is equal to pending"],["serviceNowRecordsProcessStatus is equal to PENDING"]]'
+                - serviceNowRecordsProcessStatus is equal to pending
             continue_on_partial_execution: false
             sequential: true
         trigger:
