@@ -4,21 +4,28 @@ This module transforms ServiceNow records to IDP policy rules.
 
 import json
 import logging
+import re
+
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from logging import Logger
 from typing import Optional, Dict, Any, List
+from urllib.parse import urlparse, parse_qs
 
-from crowdstrike.foundry.function import Function, Request, Response, APIError
+from crowdstrike.foundry.function import Function, Request, Response
 from falconpy import IdentityProtection
+from falconpy import APIIntegrations
 
 FUNC = Function.instance()
 
-@FUNC.handler(method='POST', path='/transform')
-def transform_rules(request: Request, config: [dict[str, any], None], logger: Logger) -> Response:
+# constant
+OFFSET_PARAM_KEY = 'sysparm_offset'
+
+@FUNC.handler(method='POST', path='/get-data-transform')
+def get_table_data_transform_rules(request: Request, config: Optional[Dict[str, Any]], logger: Logger) -> Response:
     """
-    Transform IDP policy rules by updating or creating rule conditions.
+    Get data from ServiceNow CMDB table and transform IDP policy rules by updating or creating rule conditions.
     Gets IDP policy rules and updates them if present else creates a new IDP policy rule.
 
     Args:
@@ -29,30 +36,161 @@ def transform_rules(request: Request, config: [dict[str, any], None], logger: Lo
     Returns:
         Response: HTTP response with a summary of IDP Policy rule synchronization
     """
+
     # placeholder to use data from config
     if config:
         pass
-    logger.info("/transform")
-    return _transform_rules(logger, request)
+    logger.info("/get-data-transform")
+    return fetch_and_process_servicenow_records(request, logger)
 
 
-def _transform_rules(logger, request):
-    if 'result' not in request.body or 'result' not in request.body['result']:
-        return Response(
-            code=400,
-            errors=[APIError(code=400, message='result array is missing in the request body')]
+def fetch_and_process_servicenow_records(request, logger=None):
+    """
+    Fetch ServiceNow data using Link header pagination and process each batch immediately.
+    """
+    try:
+        # API-Integration definitionId
+        definition_id = request.body.get('apiDefinitionId', "")
+        # API-Integration operationID
+        operation_id = request.body.get('apiOperationId', "")
+        # ServiceNow tableName
+        table_name = request.body.get('tableName', "")
+        # latestSysUpdatedOn to be used to get new records
+        latest_sys_updated_on = request.body.get('latestSysUpdatedOn', "")
+
+        # record filter query. by default, it's ordered by 'sys_updated_on' field
+        query = request.body.get('sysParamQuery', f"sys_updated_on>={latest_sys_updated_on}")
+        query +="^ORDERBYsys_updated_on"
+
+        # per page records limit
+        limit = request.body.get('sysParamLimit', 100)
+        # next page URL
+        request_next_page_url = request.body.get('serviceNowNextPageURL', None)
+
+        offset = 0
+
+        response_body = initialize_response_body()
+
+        if not all([definition_id, operation_id, table_name, latest_sys_updated_on]):
+            response_body['errors']['description'] = (
+                "Missing required configuration: apiIntegrationDefinitionId, "
+                "apiIntegrationOperationId, tableName, latestSysUpdatedOn"
+            )
+            return Response(body=response_body, code=400)
+
+        # if next_page_url available, get next offset
+        if request_next_page_url:
+            offset = get_query_param_from_url(request_next_page_url, OFFSET_PARAM_KEY)
+
+        response = get_servicenow_data(logger, definition_id, operation_id, table_name, query, limit, offset)
+
+        if response["status_code"] != 200:
+            body = response.get("body", {})
+            error_msg = "Failed to get ServiceNow table data using API-Integration"
+            logger.error(f"{error_msg}; response body: {body}")
+
+            errors = body.get("errors", [])
+            response_body['errors']['description'] = error_msg
+            response_body['errors']['errs'] = errors
+            response_body['serviceNowRecordsProcessStatus'] = Status.FAILED
+            return Response(body=response_body, code=response["status_code"])
+
+        next_page_url, last_page_url = parse_link_header_and_get_next_page_url(
+            response.get('headers', {}).get('Link', ''), logger
         )
 
-    transform_request = TransformRequest.from_request(request.body)
-    latest_sys_updated_on = transform_request.latest_sys_updated_on
+        current_batch = response.get('body', {}).get('result', [])
+        logger.info(f"Processing batch of {len(current_batch)} records")
 
+        # Process batch
+        transform_response = _transform_rules(logger, request, current_batch, response_body)
+
+        if transform_response.code!= 200:
+            transform_response.body['serviceNowRecordsProcessStatus'] = Status.FAILED
+            logger.error(f"Failed to transform to IDP rules; response: {transform_response}")
+            return transform_response
+
+
+        if next_page_url:
+            # if preset, update next page url in response body
+            transform_response.body['serviceNowNextPageURL']= next_page_url
+
+        # Set status completed if nextURL and lastURL is equal or nextURL falsy
+        if request_next_page_url == last_page_url or not next_page_url:
+            # if last page mark status COMPLETED
+            transform_response.body['serviceNowRecordsProcessStatus'] = Status.COMPLETED
+            logger.info(f"Record processing done. Setting 'serviceNowRecordsProcessStatus' {Status.COMPLETED}")
+
+        logger.info(
+            f"Total records processed in the batch: {len(current_batch)}; "
+            f"\nResponse body to return: {transform_response}"
+        )
+
+        return transform_response
+
+    except (ValueError, TypeError, AttributeError) as e:
+        error_msg = f"Error in processing records: {str(e)}"
+        logger.error(f"error_msg: {e}")
+        response_body = initialize_response_body()
+        response_body['errors']['description'] = error_msg
+        response_body['serviceNowRecordsProcessStatus'] = Status.FAILED
+        return Response(body=response_body, code=500)
+
+
+def get_servicenow_data(logger, definition_id, operation_id, table_name, query, limit, offset):
+    """
+    Get ServiceNow data using API Integration.
+    
+    Args:
+        logger: Logger instance
+        definition_id: API Integration definition ID
+        operation_id: API Integration operation ID
+        table_name: ServiceNow table name
+        query: Query parameters
+        limit: Limit per page
+        offset: Offset for pagination
+        
+    Returns:
+        Response from ServiceNow API
+    """
+    logger.info(
+        f"getting servicenow data using API-Integration. table_name:{table_name}, "
+        f"query: {query}, limit:{limit}, offset:{offset}"
+    )
+
+    # Use the APIIntegrations client to call ServiceNow Table API
+    api = APIIntegrations()
+    response = api.execute_command_proxy(
+        definition_id=definition_id,
+        operation_id=operation_id,
+        params={
+            "path": {"tableName": table_name},
+            "query": {"sysparm_limit": limit,
+                      "sysparm_query": query,
+                      "sysparm_offset": offset}
+        },
+        request={
+            "headers": {
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            }
+        }
+    )
+
+    logger.info(f"ServiceNow API response: {response}")
+    return response
+
+
+def _transform_rules(logger, request, result_data, response_body):
+    transform_request = TransformRequest.from_request(request.body)
+    transform_request.result = result_data
+    latest_sys_updated_on = transform_request.latest_sys_updated_on
 
     identity_protection = IdentityProtection(access_token=request.access_token)
     # To test locally
-    #identity_protection = IdentityProtection(client_id="client-id-value", client_secret="client-secret-value")
+    # identity_protection = IdentityProtection(client_id="client-id-value", client_secret="client-secret-value")
 
     status_code = 200
-    response_body = initialize_response_body()
     merged_result = merge_apps_access(logger, transform_request, response_body)
     for idp_policy_rule_name, access in merged_result.items():
         # Query IDP for current rule
@@ -72,8 +210,8 @@ def _transform_rules(logger, request):
             status_code = 502
             break
 
-        copy_from_cmdb_response_to_idp_create_request(idp_create_rule_request.destination.entity_id,
-                                                      idp_create_rule_request.source_user.entity_id,
+        copy_from_cmdb_response_to_idp_create_request(idp_create_rule_request.source_user.entity_id,
+                                                      idp_create_rule_request.source_endpoint.entity_id,
                                                       access)
         rule_conditions = None
         # Get policy rule details
@@ -115,7 +253,7 @@ def _transform_rules(logger, request):
     response_body['lastSyncTime'] = get_current_time()
     if latest_sys_updated_on:
         response_body['latestSysUpdatedOn'] = latest_sys_updated_on
-    logger.info(f"Response body to return: {json.dumps(response_body)}")
+    logger.info(f"Transform rules response body: {json.dumps(response_body)}")
     return Response(
         body=response_body,
         code=status_code,
@@ -160,6 +298,8 @@ def initialize_response_body() -> dict:
         "updated": 0,
         "updatedPolicyRules": [],
         "ignoredSysIdCount": 0,
+        "serviceNowNextPageURL" : "",
+        "serviceNowRecordsProcessStatus": Status.PENDING, # possible values pending and completed
         "errors": {
             "description": "",
             "errs": []
@@ -176,13 +316,14 @@ def update_idp_rule(rule_conditions, idp_create_rule_request, identity_protectio
     # Process rule conditions
     for condition in rule_conditions:
         # Copy from existing condition to idp create request
-        if 'destination' in condition:
-            if 'entityId' in condition['destination']:
-                add_to_idp_request_from_rule_condition(idp_create_rule_request.destination.entity_id,
-                                                       condition['destination']['entityId'])
-            if 'groupMembership' in condition['destination']:
-                add_to_idp_request_from_rule_condition(idp_create_rule_request.destination.group_membership,
-                                                       condition['destination']['groupMembership'])
+        if 'sourceEndpoint' in condition:
+            if 'entityId' in condition['sourceEndpoint']:
+                add_to_idp_request_from_rule_condition(idp_create_rule_request.source_endpoint.entity_id,
+                                                       condition['sourceEndpoint']['entityId'])
+            if 'groupMembership' in condition['sourceEndpoint']:
+                add_to_idp_request_from_rule_condition(idp_create_rule_request.source_endpoint.group_membership,
+                                                       condition['sourceEndpoint']['groupMembership'])
+
         if 'sourceUser' in condition:
             if 'entityId' in condition['sourceUser']:
                 add_to_idp_request_from_rule_condition(idp_create_rule_request.source_user.entity_id,
@@ -190,6 +331,13 @@ def update_idp_rule(rule_conditions, idp_create_rule_request, identity_protectio
             if 'groupMembership' in condition['sourceUser']:
                 add_to_idp_request_from_rule_condition(idp_create_rule_request.source_user.group_membership,
                                                        condition['sourceUser']['groupMembership'])
+        if 'destination' in condition:
+            if 'entityId' in condition['destination']:
+                add_to_idp_request_from_rule_condition(idp_create_rule_request.destination.entity_id,
+                                                       condition['destination']['entityId'])
+            if 'groupMembership' in condition['destination']:
+                add_to_idp_request_from_rule_condition(idp_create_rule_request.destination.group_membership,
+                                                       condition['destination']['groupMembership'])
 
     # Delete existing policy
     deleted_rules = identity_protection.delete_policy_rules(parameters={'ids': idp_policy_rule_id})
@@ -204,6 +352,7 @@ def update_idp_rule(rule_conditions, idp_create_rule_request, identity_protectio
         status_code = 502
     logger.info("deleted policy - " + str(idp_policy_rule_id))
     return status_code
+
 
 def create_idp_rule(identity_protection, idp_create_rule_request, response_body, idp_policy_rule_name, logger) -> int:
     """
@@ -223,11 +372,49 @@ def create_idp_rule(identity_protection, idp_create_rule_request, response_body,
     return status_code
 
 
+def get_query_param_from_url(url, query_param_key):
+    """
+    Get query param from URL
+    """
+    parsed_url = urlparse(url)
+    query_params = parse_qs(parsed_url.query)
+    return query_params.get(query_param_key, [])
+
+
+def parse_link_header_and_get_next_page_url(link_header, logger):
+    """Parse Link header to extract URLs and return URLs"""
+    try:
+        links = {}
+        next_page_url = None
+        last_page_url = None
+
+        if link_header:
+            for link in link_header.split(','):
+                match = re.match(r'<([^>]+)>;\s*rel="([^"]+)"', link.strip())
+                if match:
+                    url, rel = match.groups()
+                    links[rel] = url
+
+        if links:
+            logger.info(f"all Links: {links}")
+            next_page_url = links.get('next')
+            last_page_url = links.get('last')
+        else:
+            logger.info("Links response header not present; means current page has all the new records")
+
+        return next_page_url, last_page_url
+
+    except (ValueError, re.error) as e:
+        logger.error(f"Error parsing link header: {e}")
+        return None, None
+
+
 def get_current_time():
     """
     Get current time in ISO format
     """
     return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S') + 'Z'
+
 
 def parse_servicenow_timestamp(timestamp):
     """Parse a ServiceNow timestamp into a datetime object"""
@@ -237,9 +424,12 @@ def parse_servicenow_timestamp(timestamp):
     # ServiceNow format: "YYYY-MM-DD HH:MM:SS"
     return datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
 
+
 def is_timestamp_latest(stored_timestamp, new_timestamp) -> bool:
     """Compare timestamps and return true if latest"""
-    return not stored_timestamp or parse_servicenow_timestamp(new_timestamp) > parse_servicenow_timestamp(stored_timestamp)
+    return not stored_timestamp or parse_servicenow_timestamp(new_timestamp) > parse_servicenow_timestamp(
+        stored_timestamp)
+
 
 def merge_apps_access(logger, transform_request, response_body) -> dict:
     """
@@ -323,15 +513,15 @@ def get_idp_policy_rule_details(identity_protection, idp_policy_rule_id, logger,
     if idp_policy_rule_id is not None and len(idp_policy_rule_id) > 0:
         if len(idp_policy_rule_id) > 0:
             if len(idp_policy_rule_id) > 1:
-                logger.info("More than one policy rule Id is provided - " + idp_policy_rule_id + ". Using the first one "
-                            + idp_policy_rule_id[0])
+                logger.info(
+                    f"More than one policy rule Id is provided - {idp_policy_rule_id}. Using the first one "
+                    + idp_policy_rule_id[0])
 
             idp_policy_rule_id = idp_policy_rule_id[0]
             logger.info("get_policy_rules for - " + idp_policy_rule_id)
             response_body['idpPolicyRuleId'] = idp_policy_rule_id
             # get IDP policy rule details
             policy_rules = identity_protection.get_policy_rules(parameters={'ids': idp_policy_rule_id})
-            #logger.info("Received policy_rules = " + json.dumps(policy_rules))
             if (policy_rules is not None and policy_rules['status_code'] == 200 and policy_rules['body'] is not None
                     and 'resources' in policy_rules['body']
                     and len(policy_rules['body']['resources']) > 0):
@@ -345,12 +535,14 @@ def get_idp_policy_rule_details(identity_protection, idp_policy_rule_id, logger,
     return rule_conditions, errs
 
 
-def copy_from_cmdb_response_to_idp_create_request(destination_entity_id, source_user_entity_id, entities):
+def copy_from_cmdb_response_to_idp_create_request(source_user_entity_id, source_endpoint_entity_id, entities):
     """
-    Copy the entities from the CMDB response to the create IDP policy rule request
+       Copy the entities from the CMDB response to the create IDP policy rule request
     """
-    destination_entity_id.include = merge_lists_unique_ordered(destination_entity_id.include, list(entities['host_guid']))
-    source_user_entity_id.exclude = merge_lists_unique_ordered(source_user_entity_id.exclude, list(entities['user_guid']))
+    source_endpoint_entity_id.exclude = merge_lists_unique_ordered(source_endpoint_entity_id.exclude,
+                                                                   list(entities['host_guid']))
+    source_user_entity_id.include = merge_lists_unique_ordered(source_user_entity_id.include,
+                                                               list(entities['user_guid']))
 
 
 def add_to_idp_request_from_rule_condition(idp_request_entity, rule_entity):
@@ -418,6 +610,7 @@ class TransformRequest:
             idp_simulation_mode_column=request_body.get('idpSimulationModeColumn')
         )
 
+
 #### IDP rule creation classes ####
 
 @dataclass
@@ -426,11 +619,13 @@ class FilterCriteria:
     exclude: List[str] = field(default_factory=list)
     include: List[str] = field(default_factory=list)
 
+
 @dataclass
 class Destination:
     """Class representing destination filtering."""
     entity_id: FilterCriteria = field(default_factory=FilterCriteria)
     group_membership: FilterCriteria = field(default_factory=FilterCriteria)
+
 
 @dataclass
 class Activity:
@@ -438,10 +633,12 @@ class Activity:
     access_type: FilterCriteria = field(default_factory=FilterCriteria)
     access_type_custom: FilterCriteria = field(default_factory=FilterCriteria)
 
+
 @dataclass
 class SourceEndpointGroupMembership:
     """Class for source endpoint group membership (only has include)."""
     include: List[str] = field(default_factory=list)
+
 
 @dataclass
 class SourceEndpoint:
@@ -449,11 +646,13 @@ class SourceEndpoint:
     entity_id: FilterCriteria = field(default_factory=FilterCriteria)
     group_membership: SourceEndpointGroupMembership = field(default_factory=SourceEndpointGroupMembership)
 
+
 @dataclass
 class SourceUser:
     """Class representing source user filtering."""
     entity_id: FilterCriteria = field(default_factory=FilterCriteria)
     group_membership: FilterCriteria = field(default_factory=FilterCriteria)
+
 
 @dataclass
 class IdpCreatePolicyRuleRequest:
@@ -584,6 +783,12 @@ class IdpCreatePolicyRuleRequest:
                 }
             }
         }
+
+class Status:  # pylint: disable=too-few-public-methods
+    """Constants for ServiceNow record processing status."""
+    PENDING = "pending"
+    FAILED = "failed"
+    COMPLETED = "completed"
 
 if __name__ == '__main__':
     FUNC.run()

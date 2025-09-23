@@ -36,6 +36,14 @@
     "ignoredSysIdCount": {
       "type": "number"
     },
+    "serviceNowNextPageURL": {
+      "type": "string",
+      "description": "ServiceNow next page URL"
+    },
+    "serviceNowRecordsProcessStatus": {
+      "type": "string",
+      "description": "ServiceNow records process status. Possible value pending, completed or failed"
+    },
     "errors": {
       "type": "object"
     }

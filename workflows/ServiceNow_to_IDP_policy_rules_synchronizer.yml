@@ -1,15 +1,9 @@
-name: ServiceNow to IDP policy rules synchronizer
-description: Synchronizes access rules from ServiceNow CMDB to IDP Policy rules.
+name: ServiceNow data to IDP policy rules synchronizer
+description: ServiceNow table data to IDP policy rules synchronizer
 parameters:
     actions:
         configuration:
-            service_now_cmdb_table_api_23c0ead3:
-                properties:
-                    params.path.tableName:
-                        required: true
-                    params.query.sysparm_limit:
-                        required: true
-            transform_rules_aec4b131:
+            GetTableDataTransformRules:
                 properties:
                     cmdbAppNameColumn:
                         required: true
@@ -25,7 +19,11 @@ parameters:
                         required: true
                     idpTriggerColumn:
                         required: true
+                    sysParamLimit:
+                        required: false
                     sysUpdatedOnColumn:
+                        required: true
+                    tableName:
                         required: true
                     userGuidColumn:
                         required: true
@@ -37,34 +35,24 @@ parameters:
 provision_on_install: true
 trigger:
     next:
-        - create_variable_b321beaa
+        - CreateVariable
     event: Schedule
 actions:
-    UpdateVariable:
+    CreateVariable:
         next:
-            - service_now_cmdb_table_api_23c0ead3
-        id: 6c6eab39063fa3b72d98c82af60deb8a
-        class: UpdateVariable
-        properties:
-            WorkflowCustomVariable:
-                v_latestSysUpdatedOn: '${data[''get_object_from_servicenow_idp_app_state_12f7153b.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn'']== null || data[''get_object_from_servicenow_idp_app_state_12f7153b.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn'']== "" ? "1970-01-01 00:00:00" : data[''get_object_from_servicenow_idp_app_state_12f7153b.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn'']}'
-        version_constraint: ~1
-    add_object_to_servicenow_idp_app_state_1783d1b9:
-        next:
-            - write_to_log_repo_468fe687
-        id: collections.servicenow_idp_app_state.create
-        properties:
-            custom_storage_object_key: servicenow_idp_app_state
-            lastSyncTime: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.lastSyncTime}
-            latestSysUpdatedOn: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.latestSysUpdatedOn}
-    create_variable_b321beaa:
-        next:
-            - get_object_from_servicenow_idp_app_state_12f7153b
+            - GetObjectFromServicenowIdpAppState
         id: 702d15788dbbffdf0b68d8e2f3599aa4
         class: CreateVariable
         properties:
             variable_schema:
                 properties:
+                    serviceNowNextPageURL:
+                        description: ServiceNow next page URL
+                        type: string
+                    serviceNowRecordsProcessStatus:
+                        default: pending
+                        description: ServiceNow records process status. Possible value pending, completed or failed
+                        type: string
                     servicenowIdpAppState:
                         default: servicenow_idp_app_state
                         description: Synchronization checkpoint storage
@@ -73,43 +61,81 @@ actions:
                     v_latestSysUpdatedOn:
                         type: string
                 type: object
-    get_object_from_servicenow_idp_app_state_12f7153b:
+        version_constraint: ~1
+    GetObjectFromServicenowIdpAppState:
         next:
             - UpdateVariable
         id: collections.servicenow_idp_app_state.get
         properties:
             custom_storage_object_key: ${WorkflowCustomVariable.servicenowIdpAppState}
-    service_now_cmdb_table_api_23c0ead3:
+        version_constraint: ~0
+    UpdateVariable:
         next:
-            - transform_rules_aec4b131
-        id: api_integrations.service now cmdb.GET__api_now_table_tablename
+            - Loop
+        id: 6c6eab39063fa3b72d98c82af60deb8a
+        class: UpdateVariable
         properties:
-            params:
-                query:
-                    sysparm_query: sys_updated_on>=${data['WorkflowCustomVariable.v_latestSysUpdatedOn']}
-    transform_rules_aec4b131:
-        next:
-            - add_object_to_servicenow_idp_app_state_1783d1b9
-        id: functions.servicenowToIdpPolicyRulesTransformer.transform_rules
-        properties:
-            lastSyncTime: ${get_object_from_servicenow_idp_app_state_12f7153b.CustomStorage.Collection_servicenow_idp_app_state.lastSyncTime}
-            latestSysUpdatedOn: ${data['WorkflowCustomVariable.v_latestSysUpdatedOn']}
-            result:
-                result: ${service_now_cmdb_table_api_23c0ead3.API_Integration.Custom_service_now_cmdb.service_now_cmdb_table_api.body.result}
-    write_to_log_repo_468fe687:
-        id: 0ec68880256f6192b9abef766d31fb04
-        properties:
-            _fields: []
-            custom_json:
-                checkpoint: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.latestSysUpdatedOn}
-                deleted: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.deleted}
-                deletedPolicyRules: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.deletedPolicyRules}
-                errors: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.errors}
-                ignoredRecords: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.ignoredSysIdCount}
-                new: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.new}
-                newPolicyRules: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.newPolicyRules}
-                syncTime: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.lastSyncTime}
-                updated: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.updated}
-                updatedPolicyRules: ${transform_rules_aec4b131.FaaS.servicenowToIdpPolicyRulesTransformer.transform_rules.updatedPolicyRules}
-            foundry_app_id: ${{FOUNDRY_APP_ID}}
-            remove_action_prefix: false
+            WorkflowCustomVariable:
+                v_latestSysUpdatedOn: '${data[''GetObjectFromServicenowIdpAppState.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn'']== null || data[''GetObjectFromServicenowIdpAppState.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn'']== "" ? "1970-01-01 00:00:00" : data[''GetObjectFromServicenowIdpAppState.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn'']}'
+        version_constraint: ~1
+loops:
+    Loop:
+        display: While serviceNowRecordsProcessStatus is equal to pending
+        for:
+            input: ""
+            condition: WorkflowCustomVariable.serviceNowRecordsProcessStatus:'pending'
+            condition_display:
+                - serviceNowRecordsProcessStatus is equal to pending
+            continue_on_partial_execution: false
+            sequential: true
+        trigger:
+            next:
+                - GetTableDataTransformRules
+        actions:
+            AddObjectToServicenowIdpAppState:
+                next:
+                    - WriteToLogRepo
+                id: collections.servicenow_idp_app_state.create
+                properties:
+                    custom_storage_object_key: servicenow_idp_app_state
+                    lastSyncTime: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.lastSyncTime']}
+                    latestSysUpdatedOn: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.latestSysUpdatedOn']}
+                version_constraint: ~0
+            GetTableDataTransformRules:
+                next:
+                    - AddObjectToServicenowIdpAppState
+                    - UpdateVariable2
+                id: functions.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules
+                properties:
+                    apiDefinitionId: service now cmdb
+                    apiOperationId: GET__api_now_table_tablename
+                    lastSyncTime: ${data['GetObjectFromServicenowIdpAppState.CustomStorage.Collection_servicenow_idp_app_state.lastSyncTime']}
+                    latestSysUpdatedOn: ${data['WorkflowCustomVariable.v_latestSysUpdatedOn']}
+                    serviceNowNextPageURL: ${data['WorkflowCustomVariable.serviceNowNextPageURL']}
+                    sysParamQuery: sys_updated_on>=${data['WorkflowCustomVariable.v_latestSysUpdatedOn']}
+                version_constraint: ~0
+            UpdateVariable2:
+                id: 6c6eab39063fa3b72d98c82af60deb8a
+                class: UpdateVariable
+                properties:
+                    WorkflowCustomVariable:
+                        serviceNowNextPageURL: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.serviceNowNextPageURL']}
+                        serviceNowRecordsProcessStatus: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.serviceNowRecordsProcessStatus']}
+                version_constraint: ~1
+            WriteToLogRepo:
+                id: 0ec68880256f6192b9abef766d31fb04
+                properties:
+                    custom_json:
+                        checkpoint: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.latestSysUpdatedOn']}
+                        deleted: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.deleted']}
+                        deletedPolicyRules: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.deletedPolicyRules']}
+                        errors: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.errors']}
+                        ignoredRecords: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.ignoredSysIdCount']}
+                        new: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.new']}
+                        newPolicyRules: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.newPolicyRules']}
+                        syncTime: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.lastSyncTime']}
+                        updated: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.updated']}
+                        updatedPolicyRules: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.updatedPolicyRules']}
+                    foundry_app_id: ${{FOUNDRY_APP_ID}}
+                    remove_action_prefix: false
+                version_constraint: ~1
