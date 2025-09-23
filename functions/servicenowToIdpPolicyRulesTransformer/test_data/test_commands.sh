@@ -6,5 +6,5 @@ curl -X POST --location 'http://localhost:8081' \
 --data "{
     \"body\": $JSON_CONTENT,
     \"method\": \"POST\",
-    \"url\": \"/transform\"
+    \"url\": \"/get-data-transform\"
 }"

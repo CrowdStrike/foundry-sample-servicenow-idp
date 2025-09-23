@@ -46,10 +46,10 @@ functions:
       path: functions/servicenowToIdpPolicyRulesTransformer
       environment_variables: {}
       handlers:
-        - name: transform_rules
-          description: This Function translates ServiceNow data to IDP policy rules
+        - name: get_table_data_transform_rules
+          description: This Function fetches data from ServieNow table and translates to IDP policy rules
           method: POST
-          api_path: /transform
+          api_path: /get-data-transform
           payload_type: ""
           request_schema: schemas/transform_rules_request_schema.json
           response_schema: schemas/transform_rules_response_schema.json
@@ -60,6 +60,7 @@ functions:
             tags: []
           permissions: []
       language: python
+      max_exec_duration_seconds: 900
 workflows:
     - id: 
       name: ServiceNow to IDP policy rules synchronizer
