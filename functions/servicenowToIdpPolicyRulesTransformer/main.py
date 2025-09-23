@@ -99,6 +99,8 @@ def fetch_and_process_servicenow_records(request, logger=None):
             response.get('headers', {}).get('Link', ''), logger
         )
 
+        response_body["serviceNowTotalRecordCount"] = response.get('headers', {}).get('X-Total-Count', '')
+
         current_batch = response.get('body', {}).get('result', [])
         logger.info(f"Processing batch of {len(current_batch)} records")
 
@@ -300,6 +302,7 @@ def initialize_response_body() -> dict:
         "ignoredSysIdCount": 0,
         "serviceNowNextPageURL" : "",
         "serviceNowRecordsProcessStatus": Status.PENDING, # possible values pending and completed
+        "serviceNowTotalRecordCount": "",
         "errors": {
             "description": "",
             "errs": []
