@@ -405,7 +405,7 @@ class FnTestCase(unittest.TestCase):
         expected_keys = {
             "latestSysUpdatedOn", "lastSyncTime", "deleted", "deletedPolicyRules",
             "new", "newPolicyRules", "updated", "updatedPolicyRules", "ignoredSysIdCount",
-            "serviceNowNextPageURL", "serviceNowRecordsProcessStatus", "errors"
+            "serviceNowNextPageURL", "serviceNowRecordsProcessStatus", "serviceNowTotalRecordCount", "errors"
         }
 
         self.assertEqual(set(response_body.keys()), expected_keys)
