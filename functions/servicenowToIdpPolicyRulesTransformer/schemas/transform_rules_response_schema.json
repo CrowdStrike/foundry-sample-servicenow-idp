@@ -45,7 +45,7 @@
       "description": "ServiceNow records process status. Possible value pending, completed or failed"
     },
     "serviceNowTotalRecordCount": {
-      "type": "string",
+      "type": "number",
       "description": "ServiceNow total record count to process"
     },
     "errors": {
