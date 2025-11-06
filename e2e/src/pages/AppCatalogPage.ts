@@ -155,25 +155,31 @@ export class AppCatalogPage extends BasePage {
 
     this.logger.info('ServiceNow configuration required, filling dummy values');
 
+    // NOTE: For repeatable E2E tests, we use dummy credentials that pass validation
+    // but don't connect to a real ServiceNow instance. Customers can substitute their
+    // actual ServiceNow credentials, but it's not recommended to use real production
+    // data in automated E2E tests like these.
+
     // Fill configuration fields using index-based selection
     // Field 1: Name
     const nameField = this.page.locator('input[type="text"]').first();
     await nameField.fill('ServiceNow Test Instance');
     this.logger.debug('Filled Name field');
 
-    // Field 2: Instance (the {instance} part of {instance}.service-now.com)
-    const instanceField = this.page.locator('input[type="text"]').nth(1);
-    await instanceField.fill('dev12345');
-    this.logger.debug('Filled Instance field');
+    // Field 2: Host URL - must be resolvable for servicenow-idp backend validation
+    // Using https://example.com (fake but resolvable) instead of actual ServiceNow instance
+    const hostField = this.page.locator('input[type="text"]').nth(1);
+    await hostField.fill('https://example.com');
+    this.logger.debug('Filled Host field with resolvable hostname');
 
     // Field 3: Username
     const usernameField = this.page.locator('input[type="text"]').nth(2);
-    await usernameField.fill('dummy_user');
+    await usernameField.fill('foundry_test_user');
     this.logger.debug('Filled Username field');
 
     // Field 4: Password (must be >8 characters)
     const passwordField = this.page.locator('input[type="password"]').first();
-    await passwordField.fill('DummyPassword123');
+    await passwordField.fill('test-password');
     this.logger.debug('Filled Password field');
 
     // Wait for network to settle after filling form

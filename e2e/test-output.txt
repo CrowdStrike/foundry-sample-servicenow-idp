@@ -1,0 +1,62 @@
+
+> playwright-foundry@1.0.0 test
+> npx playwright test
+
+[38;5;142m[dotenvx@1.49.0] injecting env (0) from .env[39m
+
+Running 4 tests using 1 worker
+
+[33m[dotenvx@1.49.0] injecting env (0) from .env[39m
+  ✓  1 [setup] › tests/authenticate.setup.ts:9:6 › authenticate (1.0s)
+🔧 Test Configuration:
+  Environment: Local
+  Base URL: https://falcon.us-2.crowdstrike.com
+  App Name: foundry-sample-servicenow-idp
+  Default Timeout: 30000ms
+  Retry Attempts: 2
+  Debug Mode: false (enable with DEBUG=true npm test or npm run test:debug)
+🔍 [1] AppCatalogPage: Check if app 'foundry-sample-servicenow-idp' is installed
+ℹ️ Searching for app 'foundry-sample-servicenow-idp' in catalog
+🔧 [2] AppCatalogPage: App catalog page
+✅ Found app 'foundry-sample-servicenow-idp' in catalog
+👆 [3] AppCatalogPage: Click App 'foundry-sample-servicenow-idp' link
+ℹ️ App 'foundry-sample-servicenow-idp' installation status: Installed
+App 'foundry-sample-servicenow-idp' is already installed
+  ✓  2 [app-install] › tests/app-install.setup.ts:3:6 › install servicenow idp app (8.8s)
+ℹ️ Navigating to Fusion SOAR Workflows
+🔧 [1] Workflows: Foundry Home
+✅ Workflows page loaded
+⚡ Navigate to Workflows completed in 9.40s
+ℹ️ Creating new workflow
+✅ Workflow builder opened
+⚡ Create new workflow completed in 878ms
+  ✘  3 [chromium] › tests/foundry.spec.ts:6:7 › ServiceNow IDP - E2E Tests › should verify ServiceNow API integration action is available in workflow builder (19.6s)
+
+
+  1) [chromium] › tests/foundry.spec.ts:6:7 › ServiceNow IDP - E2E Tests › should verify ServiceNow API integration action is available in workflow builder 
+
+    Error: Action 'service now cmdb' not found in search results
+
+      50 |
+      51 |     if (actionElements.length === 0) {
+    > 52 |       throw new Error(`Action '${actionName}' not found in search results`);
+         |             ^
+      53 |     }
+      54 |
+      55 |     console.log(`Found ${actionElements.length} instance(s) of '${actionName}' - trying each until one works...`);
+        at /Users/mraible/dev/foundry-sample-servicenow-idp/e2e/tests/foundry.spec.ts:52:13
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/foundry-ServiceNow-IDP---E-3375f-ailable-in-workflow-builder-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/foundry-ServiceNow-IDP---E-3375f-ailable-in-workflow-builder-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/foundry-ServiceNow-IDP---E-3375f-ailable-in-workflow-builder-chromium/error-context.md
+
+  1 failed
+    [chromium] › tests/foundry.spec.ts:6:7 › ServiceNow IDP - E2E Tests › should verify ServiceNow API integration action is available in workflow builder 
+  1 did not run
+  2 passed (30.8s)

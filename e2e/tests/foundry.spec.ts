@@ -45,6 +45,16 @@ test.describe('ServiceNow IDP - E2E Tests', () => {
     await loadingMessages.first().waitFor({ state: 'hidden', timeout: 60000 }).catch(() => {});
     await workflowsPage.page.waitForLoadState('networkidle');
 
+    // Expand "Other (Custom, Foundry, etc.)" section if it exists
+    const otherSection = workflowsPage.page.getByText('Other (Custom, Foundry, etc.)');
+    if (await otherSection.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await otherSection.click();
+
+      // Wait for section's internal loading to complete
+      await loadingMessages.first().waitFor({ state: 'hidden', timeout: 60000 }).catch(() => {});
+      await workflowsPage.page.waitForLoadState('networkidle');
+    }
+
     // Find all instances of this action (may include stale ones from previous installs)
     const actionElements = await workflowsPage.page.getByText(actionName, { exact: false }).all();
 
