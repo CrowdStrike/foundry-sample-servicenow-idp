@@ -166,10 +166,14 @@ export class AppBuilderPage extends BasePage {
     // Navigate to Logic section
     await this.navigateToLogicSection();
 
-    // Get all workflow rows from the Workflow templates table
-    const workflowRows = this.page.locator('table tbody tr, [role="row"]').filter({
-      has: this.page.locator('[role="gridcell"] a')
-    });
+    // Get all workflow rows from the Workflow templates grid
+    // It's a table element with role="grid"
+    const workflowRowsContainer = this.page.getByRole('grid').first();
+
+    // Wait for the grid to be visible
+    await workflowRowsContainer.waitFor({ state: 'visible', timeout: 10000 });
+
+    const workflowRows = workflowRowsContainer.locator('tbody tr');
 
     const workflowCount = await workflowRows.count();
     this.logger.info(`Found ${workflowCount} workflow template(s)`);
@@ -182,13 +186,12 @@ export class AppBuilderPage extends BasePage {
     // Process each workflow
     for (let i = 0; i < workflowCount; i++) {
       // Re-query workflows each time since DOM changes after saves
-      const currentWorkflowRows = this.page.locator('table tbody tr, [role="row"]').filter({
-        has: this.page.locator('[role="gridcell"] a')
-      });
+      const currentWorkflowRowsContainer = this.page.getByRole('grid').first();
+      const currentWorkflowRows = currentWorkflowRowsContainer.locator('tbody tr');
       const row = currentWorkflowRows.nth(i);
 
       // Get workflow name for logging
-      const workflowNameLink = row.locator('[role="gridcell"] a').first();
+      const workflowNameLink = row.locator('a[data-test-selector="workflow-name-link"]').first();
       const workflowName = await workflowNameLink.textContent() || `Workflow ${i + 1}`;
       this.logger.info(`Processing workflow: ${workflowName.trim()}`);
 

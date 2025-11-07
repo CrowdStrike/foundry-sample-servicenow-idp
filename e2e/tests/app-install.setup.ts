@@ -1,16 +1,13 @@
 import { test as setup } from '../src/fixtures';
 
-setup('install servicenow idp app', async ({ appCatalogPage, appBuilderPage, appName }) => {
+setup('install servicenow idp app', async ({ appCatalogPage, appName }) => {
   // Check if app is already installed (this navigates to the app page)
   const isInstalled = await appCatalogPage.isAppInstalled(appName);
 
   if (!isInstalled) {
-    console.log(`App '${appName}' is not installed. Disabling workflow provisioning and installing...`);
+    console.log(`App '${appName}' is not installed. Installing...`);
 
-    // Disable workflow provisioning before installation
-    await appBuilderPage.disableWorkflowProvisioning(appName);
-
-    // Now install the app
+    // Install the app
     const installed = await appCatalogPage.installApp(appName);
 
     if (!installed) {
