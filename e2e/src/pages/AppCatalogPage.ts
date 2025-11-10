@@ -127,65 +127,185 @@ export class AppCatalogPage extends BasePage {
   }
 
   /**
-   * Configure API integration if configuration form is present during installation.
-   * 
-   * NOTE: This method currently handles ServiceNow-specific fields but is designed as
-   * a no-op for apps without API integrations. This common pattern across all sample apps
-   * will be extracted to the future @crowdstrike/foundry-e2e-testing framework.
-   * 
-   * Apps with ServiceNow configuration: servicenow-itsm, servicenow-idp
-   * Other apps: Returns early when no configuration fields detected
-   * 
-   * @future-framework-extraction Candidate for BasePage or AppCatalogPage in shared framework
+   * Get field context by looking at nearby labels and text
    */
-  private async configureApiIntegrationIfNeeded(): Promise<void> {
-    this.logger.info('Checking for API integration configuration form...');
-
-    // Check if there are text input fields (configuration form)
-    const textInputs = this.page.locator('input[type="text"]');
-
+  private async getFieldContext(input: any): Promise<string> {
     try {
-      await textInputs.first().waitFor({ state: 'visible', timeout: 15000 });
-      const count = await textInputs.count();
-      this.logger.info(`ServiceNow configuration form detected with ${count} input fields`);
+      // Try to find the label element
+      const id = await input.getAttribute('id');
+      if (id) {
+        const label = this.page.locator(`label[for="${id}"]`);
+        if (await label.isVisible({ timeout: 1000 }).catch(() => false)) {
+          const labelText = await label.textContent();
+          if (labelText) return labelText.toLowerCase();
+        }
+      }
+
+      // Look at parent container for context
+      const parent = input.locator('xpath=ancestor::div[contains(@class, "form") or contains(@class, "field") or contains(@class, "input")][1]');
+      if (await parent.isVisible({ timeout: 1000 }).catch(() => false)) {
+        const parentText = await parent.textContent();
+        if (parentText) return parentText.toLowerCase();
+      }
     } catch (error) {
-      this.logger.info('No ServiceNow configuration required - no input fields found');
-      return;
+      // Continue if we can't get context
+    }
+    return '';
+  }
+
+  /**
+   * Get value for a field based on its context
+   */
+  private getFieldValue(context: string, name: string, placeholder: string, inputType: string): string {
+    const combined = `${context} ${name} ${placeholder}`.toLowerCase();
+
+    // ServiceNow-specific field detection
+    if (combined.includes('host') || combined.includes('url')) {
+      return 'https://example.com';
     }
 
-    this.logger.info('ServiceNow configuration required, filling dummy values');
+    if (combined.includes('name') && !combined.includes('host') && !combined.includes('user')) {
+      return 'ServiceNow Test Instance';
+    }
 
-    // NOTE: For repeatable E2E tests, we use dummy credentials that pass validation
-    // but don't connect to a real ServiceNow instance. Customers can substitute their
-    // actual ServiceNow credentials, but it's not recommended to use real production
-    // data in automated E2E tests like these.
+    if (combined.includes('username') || combined.includes('user')) {
+      return 'foundry_test_user';
+    }
 
-    // Fill configuration fields using index-based selection
-    // Field 1: Name
-    const nameField = this.page.locator('input[type="text"]').first();
-    await nameField.fill('ServiceNow Test Instance');
-    this.logger.debug('Filled Name field');
+    if (inputType === 'password') {
+      return 'test-password';
+    }
 
-    // Field 2: Host URL - must be resolvable for servicenow-idp backend validation
-    // Using https://example.com (fake but resolvable) instead of actual ServiceNow instance
-    const hostField = this.page.locator('input[type="text"]').nth(1);
-    await hostField.fill('https://example.com');
-    this.logger.debug('Filled Host field with resolvable hostname');
+    // Default values
+    return 'test-value';
+  }
 
-    // Field 3: Username
-    const usernameField = this.page.locator('input[type="text"]').nth(2);
-    await usernameField.fill('foundry_test_user');
-    this.logger.debug('Filled Username field');
+  /**
+   * Configure API integration if configuration form is present during installation.
+   * Fills in dummy values for all configuration fields and clicks through multiple settings.
+   */
+  private async configureApiIntegrationIfNeeded(): Promise<void> {
+    let configCount = 0;
+    let hasNextSetting = true;
 
-    // Field 4: Password (must be >8 characters)
-    const passwordField = this.page.locator('input[type="password"]').first();
-    await passwordField.fill('test-password');
-    this.logger.debug('Filled Password field');
+    // Keep filling configs until we can't find either "Next setting" or more empty fields
+    while (hasNextSetting) {
+      configCount++;
+      this.logger.info(`Configuration screen ${configCount} detected, filling fields...`);
 
-    // Wait for network to settle after filling form
-    await this.page.waitForLoadState('networkidle');
+      // Fill visible text inputs
+      const inputs = this.page.locator('input[type="text"], input[type="url"], input:not([type="password"]):not([type])');
+      const count = await inputs.count();
+      this.logger.info(`Found ${count} text input fields`);
 
-    this.logger.success('ServiceNow API configuration completed');
+      for (let i = 0; i < count; i++) {
+        const input = inputs.nth(i);
+        if (await input.isVisible()) {
+          const name = await input.getAttribute('name') || '';
+          const placeholder = await input.getAttribute('placeholder') || '';
+          const context = (await this.getFieldContext(input)).trim().replace(/\s+/g, ' ');
+
+          const value = this.getFieldValue(context, name, placeholder, 'text');
+          await input.fill(value);
+          this.logger.info(`Filled input [${name || 'unnamed'}] context:"${context}" -> "${value}"`);
+        }
+      }
+
+      // Fill password inputs
+      const passwordInputs = this.page.locator('input[type="password"]');
+      const passwordCount = await passwordInputs.count();
+      this.logger.info(`Found ${passwordCount} password input fields`);
+
+      for (let i = 0; i < passwordCount; i++) {
+        const input = passwordInputs.nth(i);
+        if (await input.isVisible()) {
+          const name = await input.getAttribute('name') || '';
+          const placeholder = await input.getAttribute('placeholder') || '';
+          const context = (await this.getFieldContext(input)).trim().replace(/\s+/g, ' ');
+
+          const value = this.getFieldValue(context, name, placeholder, 'password');
+          await input.fill(value);
+          this.logger.info(`Filled password [${name || 'unnamed'}] context:"${context}"`);
+        }
+      }
+
+      // Fill select/dropdown fields (including Foundry custom dropdowns)
+      // Foundry uses button-based dropdowns with aria-haspopup
+      const selectFields = this.page.locator('select, [role="combobox"], button[aria-haspopup="listbox"], button[aria-haspopup="menu"]');
+      const selectCount = await selectFields.count();
+      this.logger.info(`Found ${selectCount} select/dropdown fields`);
+
+      for (let i = 0; i < selectCount; i++) {
+        const select = selectFields.nth(i);
+        if (await select.isVisible()) {
+          const name = await select.getAttribute('name') || '';
+          const ariaLabel = await select.getAttribute('aria-label') || '';
+          const tagName = await select.evaluate(el => el.tagName.toLowerCase());
+
+          if (tagName === 'select') {
+            // Native select element - select first non-empty option
+            const options = select.locator('option');
+            const optionCount = await options.count();
+
+            if (optionCount > 1) {
+              // Get the second option (first is usually empty/placeholder)
+              const firstValue = await options.nth(1).getAttribute('value');
+              if (firstValue) {
+                await select.selectOption(firstValue);
+                this.logger.info(`Selected option in select [${name || ariaLabel || 'unnamed'}]`);
+              }
+            }
+          } else if (tagName === 'button') {
+            // Foundry button-based dropdown - click button and select first option
+            try {
+              await select.click();
+              await this.waiter.delay(1000);
+
+              // Look for menu/listbox options
+              const option = this.page.locator('[role="option"], [role="menuitem"]').first();
+              if (await option.isVisible({ timeout: 2000 })) {
+                await option.click();
+                this.logger.info(`Selected option in button dropdown [${name || ariaLabel || 'unnamed'}]`);
+                await this.waiter.delay(500);
+              }
+            } catch (error) {
+              this.logger.info(`Could not select option in button dropdown [${name || ariaLabel || 'unnamed'}]: ${error.message}`);
+            }
+          } else {
+            // Role="combobox" - click and select first option
+            try {
+              await select.click();
+              await this.waiter.delay(500);
+
+              // Look for listbox options
+              const option = this.page.locator('[role="option"]').first();
+              if (await option.isVisible({ timeout: 2000 })) {
+                await option.click();
+                this.logger.info(`Selected option in combobox [${name || ariaLabel || 'unnamed'}]`);
+              }
+            } catch (error) {
+              this.logger.info(`Could not select option in combobox [${name || ariaLabel || 'unnamed'}]: ${error.message}`);
+            }
+          }
+        }
+      }
+
+      // Check for "Next setting" button
+      const nextSettingButton = this.page.getByRole('button', { name: /next setting/i });
+      hasNextSetting = await this.elementExists(nextSettingButton, 2000);
+
+      if (hasNextSetting) {
+        this.logger.info(`Filled configuration screen ${configCount}, clicking Next setting`);
+        await this.smartClick(nextSettingButton, 'Next setting button');
+        await this.page.waitForLoadState('networkidle');
+        await this.waiter.delay(3000);
+      } else {
+        this.logger.info(`No more "Next setting" button found after ${configCount} screen(s)`);
+        break;
+      }
+    }
+
+    this.logger.info(`Completed ${configCount} configuration screen(s)`);
   }
 
   /**
@@ -318,11 +438,12 @@ export class AppCatalogPage extends BasePage {
       await this.waiter.waitForVisible(uninstallButton, { description: 'Uninstall confirmation button' });
       await this.smartClick(uninstallButton, 'Uninstall button');
 
-      // Wait for success message
-      const successMessage = this.page.getByText(/has been uninstalled/i);
+      // Wait for success message (toast notification)
+      // Wait up to 60 seconds for the uninstalled toast to appear
+      const successMessage = this.page.getByText(/has been uninstalled|uninstalled successfully/i);
       await this.waiter.waitForVisible(successMessage, {
         description: 'Uninstall success message',
-        timeout: 30000
+        timeout: 60000
       });
 
       this.logger.success(`App '${appName}' uninstalled successfully`);

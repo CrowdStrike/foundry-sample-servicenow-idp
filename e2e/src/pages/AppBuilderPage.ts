@@ -12,6 +12,57 @@ export class AppBuilderPage extends BasePage {
   }
 
   /**
+   * Check if the latest release notes indicate that workflow provisioning has already been disabled
+   * Returns true if the release notes contain "E2E test: Disabled workflow provisioning"
+   */
+  private async hasWorkflowProvisioningAlreadyBeenDisabled(appName: string): Promise<boolean> {
+    return await RetryHandler.withPlaywrightRetry(
+      async () => {
+        this.logger.info('Checking if workflow provisioning has already been disabled in latest release');
+
+        // Navigate to App Catalog to check release notes
+        await this.navigateToPath('/foundry/app-catalog', 'App Catalog');
+        await this.page.waitForLoadState('networkidle');
+
+        // Search for the app
+        const searchBox = this.page.locator('input[type="search"], input[placeholder*="Search"]').first();
+        await searchBox.waitFor({ state: 'visible', timeout: 10000 });
+        await searchBox.fill(appName);
+        await this.page.waitForLoadState('networkidle');
+
+        // Click on the app link
+        const appLink = this.page.locator(`a:has-text("${appName}")`).first();
+        await appLink.waitFor({ state: 'visible', timeout: 10000 });
+        await appLink.click();
+        await this.page.waitForLoadState('networkidle');
+
+        // Click on the "Releases" tab
+        const releasesTab = this.page.getByRole('tab', { name: /Releases/i });
+        await releasesTab.waitFor({ state: 'visible', timeout: 10000 });
+        await releasesTab.click();
+        await this.page.waitForLoadState('networkidle');
+
+        // Get the first (latest) release notes
+        // The release notes are in a table with columns: Version, Release notes, Released on
+        const releaseNotesCell = this.page.locator('table tbody tr:first-child td:nth-child(2)').first();
+        await releaseNotesCell.waitFor({ state: 'visible', timeout: 10000 });
+
+        const releaseNotesText = await releaseNotesCell.textContent();
+        const hasMarker = releaseNotesText?.includes('E2E test: Disabled workflow provisioning') || false;
+
+        if (hasMarker) {
+          this.logger.info('Latest release notes indicate workflow provisioning already disabled - skipping disable process');
+        } else {
+          this.logger.info('Latest release notes do not contain provisioning marker - will check and disable if needed');
+        }
+
+        return hasMarker;
+      },
+      'Check release notes for workflow provisioning marker'
+    );
+  }
+
+  /**
    * Navigate to App Manager and open app details page
    * This method assumes we're starting from somewhere in Foundry
    */
@@ -152,6 +203,13 @@ export class AppBuilderPage extends BasePage {
    */
   async disableWorkflowProvisioning(appName: string): Promise<void> {
     this.logger.info('Starting to disable workflow provisioning for all templates');
+
+    // Check if workflow provisioning has already been disabled in a previous release
+    const alreadyDisabled = await this.hasWorkflowProvisioningAlreadyBeenDisabled(appName);
+    if (alreadyDisabled) {
+      this.logger.success('Workflow provisioning already disabled in previous release - skipping');
+      return;
+    }
 
     // Navigate to App details page in App Manager
     await this.navigateToAppDetailsPage(appName);
