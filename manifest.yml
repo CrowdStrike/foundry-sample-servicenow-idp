@@ -7,7 +7,9 @@ vendor_products:
     - CMDB
 use_case: Identity & Access
 manifest_version: "2023-05-09"
-ignored: []
+ignored:
+    - e2e
+    - e2e/.+
 ui:
     homepage: ""
     extensions: []
