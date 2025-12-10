@@ -45,7 +45,7 @@ Authorization artifact configures all required scopes for the app to interact wi
 #### API Integration
 The ServiceNow CMDB Table API spec is implemented as an API Integration artifact. It uses basic authorization for accessing the ServiceNow API, which can be customized during app installation to match customer environments.
 
-![ServiceNow Settings](https://assets.falcon.crowdstrike.com/app_docs/6336812e18b14741a18115dde719ea4c/v2.0.0/servicenowSettings2.png)
+![ServiceNow Settings](servicenowSettings2.png)
 
 #### Collection
 The application maintains synchronization state by storing checkpoint details after each sync operation. These checkpoints include the last sync time and the last updated timestamp of the most recently processed record. During subsequent synchronizations, only records updated since the checkpointed time are processed, ensuring efficient operation.
@@ -65,20 +65,11 @@ This workflow can be triggered manually to reset the checkpoint time when record
 ##### ServiceNow to IDP policy rules synchronizer
 This workflow serves as the main execution engine of the application, orchestrating all artifacts to perform the synchronization process. Upon completion of each run, it writes a summary record to LogScale that can be leveraged to create NG-SIEM dashboards and alerts for monitoring synchronization status.
 
-![IDP Policy rules](https://assets.falcon.crowdstrike.com/app_docs/5472594292fb4e51bf2c81641ce21016/v22.0.0/idpPolicyRules.png)
-
-
-
+![IDP Policy rules](idpPolicyRules.png)
 
 The records written to LogScale by the app can be fetched as shown below from NG SIEM.
 
-
-
-
-
-![NGSIEM advanced event search](https://assets.falcon.crowdstrike.com/app_docs/5472594292fb4e51bf2c81641ce21016/v13.0.0/ngsiemSearch.png)
-
-
+![NGSIEM advanced event search](ngsiemSearch.png)
 
 ## 5. Development Environment
 ### Development Stack
@@ -115,6 +106,3 @@ The records written to LogScale by the app can be fetched as shown below from NG
 - Implements a restrictive security model (block all access except explicitly permitted connections)
 - Requires least-privilege service accounts for both platforms
 - All API communications use secure, authenticated connections
-
-
-
