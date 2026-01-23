@@ -78,8 +78,8 @@ test.describe('ServiceNow IDP - E2E Tests', () => {
         // Wait for the details panel to load and check if configuration is present
         // Stale actions won't show the "Configure" heading
         try {
-          const configureHeading = workflowsPage.page.getByRole('heading', { name: 'Configure', level: 4 });
-          await configureHeading.waitFor({ state: 'visible', timeout: 10000 });
+          const configureTab = workflowsPage.page.getByRole('tab', { name: 'Configure' });
+          await configureTab.waitFor({ state: 'visible', timeout: 10000 });
           console.log(`✓ Action verified: ${actionName} - Configure section is present`);
           actionVerified = true;
           break;
