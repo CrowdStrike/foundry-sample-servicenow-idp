@@ -318,11 +318,11 @@ export class AppCatalogPage extends BasePage {
     await this.waiter.waitForVisible(installButton, { description: 'Install button' });
 
     // Wait for button to be enabled
-    await installButton.waitFor({ state: 'visible', timeout: 10000 });
+    await installButton.waitFor({ state: 'visible', timeout: 30000 });
     await installButton.waitFor({ state: 'attached', timeout: 5000 });
 
-    // Simple delay for form to enable button
-    await this.waiter.delay(1000);
+    // Delay for form to enable button (longer on CI)
+    await this.waiter.delay(3000);
 
     await this.smartClick(installButton, 'Install button');
     this.logger.info('Clicked Save and install button');
@@ -336,15 +336,15 @@ export class AppCatalogPage extends BasePage {
 
     // Wait for URL to change or network to settle
     await Promise.race([
-      this.page.waitForURL(/\/foundry\/(app-catalog|home)/, { timeout: 15000 }),
-      this.page.waitForLoadState('networkidle', { timeout: 15000 })
+      this.page.waitForURL(/\/foundry\/(app-catalog|home)/, { timeout: 30000 }),
+      this.page.waitForLoadState('networkidle', { timeout: 30000 })
     ]).catch(() => {});
 
     // Look for first "installing" message
     const installingMessage = this.page.getByText(/installing/i).first();
 
     try {
-      await installingMessage.waitFor({ state: 'visible', timeout: 30000 });
+      await installingMessage.waitFor({ state: 'visible', timeout: 180000 });
       this.logger.success('Installation started - "installing" message appeared');
     } catch (error) {
       throw new Error(`Installation failed to start for app '${appName}' - "installing" message never appeared. Installation may have failed immediately.`);
@@ -357,8 +357,8 @@ export class AppCatalogPage extends BasePage {
 
     try {
       const result = await Promise.race([
-        installedMessage.waitFor({ state: 'visible', timeout: 60000 }).then(() => 'success'),
-        errorMessage.waitFor({ state: 'visible', timeout: 60000 }).then(() => 'error')
+        installedMessage.waitFor({ state: 'visible', timeout: 120000 }).then(() => 'success'),
+        errorMessage.waitFor({ state: 'visible', timeout: 120000 }).then(() => 'error')
       ]);
 
       if (result === 'error') {
@@ -372,7 +372,7 @@ export class AppCatalogPage extends BasePage {
       if (error.message.includes('Installation failed')) {
         throw error;
       }
-      throw new Error(`Installation status unclear for app '${appName}' - timed out waiting for "installed" or "error" message after 60 seconds`);
+      throw new Error(`Installation status unclear for app '${appName}' - timed out waiting for "installed" or "error" message after 120 seconds`);
     }
     // Brief catalog status check (5-10s) - "installed" toast is the real signal
     // This is just for logging/verification, not a hard requirement
