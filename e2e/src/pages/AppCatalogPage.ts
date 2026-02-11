@@ -127,6 +127,25 @@ export class AppCatalogPage extends BasePage {
   }
 
   /**
+   * Click a dropdown button and select the first available option
+   */
+  private async selectFirstDropdownOption(button: any, label: string): Promise<void> {
+    try {
+      await button.click();
+      await this.waiter.delay(1000);
+
+      const option = this.page.locator('[role="option"], [role="menuitem"]').first();
+      if (await option.isVisible({ timeout: 3000 })) {
+        await option.click();
+        this.logger.info(`Selected option in dropdown [${label}]`);
+        await this.waiter.delay(500);
+      }
+    } catch (error) {
+      this.logger.info(`Could not select option in dropdown [${label}]: ${error.message}`);
+    }
+  }
+
+  /**
    * Get field context by looking at nearby labels and text
    */
   private async getFieldContext(input: any): Promise<string> {
@@ -230,7 +249,8 @@ export class AppCatalogPage extends BasePage {
       }
 
       // Fill select/dropdown fields (including Foundry custom dropdowns)
-      // Foundry uses button-based dropdowns with aria-haspopup
+      // Foundry uses button-based dropdowns - some have aria-haspopup, others are plain buttons
+      // with "Select" placeholder text (e.g., "Select time zone")
       const selectFields = this.page.locator('select, [role="combobox"], button[aria-haspopup="listbox"], button[aria-haspopup="menu"]');
       const selectCount = await selectFields.count();
       this.logger.info(`Found ${selectCount} select/dropdown fields`);
@@ -255,38 +275,56 @@ export class AppCatalogPage extends BasePage {
                 this.logger.info(`Selected option in select [${name || ariaLabel || 'unnamed'}]`);
               }
             }
-          } else if (tagName === 'button') {
-            // Foundry button-based dropdown - click button and select first option
-            try {
-              await select.click();
-              await this.waiter.delay(1000);
-
-              // Look for menu/listbox options
-              const option = this.page.locator('[role="option"], [role="menuitem"]').first();
-              if (await option.isVisible({ timeout: 2000 })) {
-                await option.click();
-                this.logger.info(`Selected option in button dropdown [${name || ariaLabel || 'unnamed'}]`);
-                await this.waiter.delay(500);
-              }
-            } catch (error) {
-              this.logger.info(`Could not select option in button dropdown [${name || ariaLabel || 'unnamed'}]: ${error.message}`);
-            }
           } else {
-            // Role="combobox" - click and select first option
-            try {
-              await select.click();
-              await this.waiter.delay(500);
-
-              // Look for listbox options
-              const option = this.page.locator('[role="option"]').first();
-              if (await option.isVisible({ timeout: 2000 })) {
-                await option.click();
-                this.logger.info(`Selected option in combobox [${name || ariaLabel || 'unnamed'}]`);
-              }
-            } catch (error) {
-              this.logger.info(`Could not select option in combobox [${name || ariaLabel || 'unnamed'}]: ${error.message}`);
-            }
+            // Button or combobox dropdown - click and select first option
+            await this.selectFirstDropdownOption(select, name || ariaLabel || 'unnamed');
           }
+        }
+      }
+
+      // Handle Foundry dropdowns that lack aria-haspopup
+      // Some dropdowns appear pre-filled (e.g., "How often" shows "Hourly") but need to be
+      // explicitly clicked to trigger dependent fields (e.g., Time zone auto-fill).
+      // Strategy: find ALL dropdown-like buttons in the form, click ones with "Select" placeholder,
+      // then re-click ones that appear filled if validation errors remain.
+      const allButtons = this.page.locator('button');
+      const buttonCount = await allButtons.count();
+
+      for (let i = 0; i < buttonCount; i++) {
+        const btn = allButtons.nth(i);
+        if (await btn.isVisible()) {
+          const hasPopup = await btn.getAttribute('aria-haspopup');
+          if (hasPopup) continue; // Already handled above
+
+          const btnText = (await btn.textContent() || '').trim();
+          if (/^select\s/i.test(btnText)) {
+            this.logger.info(`Found unselected dropdown: "${btnText}"`);
+            await this.selectFirstDropdownOption(btn, btnText);
+          }
+        }
+      }
+
+      // Check if validation errors remain (e.g., "Select a value" text visible)
+      // This handles cases where a dropdown like "How often" shows a default value (e.g., "Hourly")
+      // but was never explicitly selected, so dependent fields (Time zone) aren't populated.
+      const validationError = this.page.getByText('Select a value');
+      if (await validationError.isVisible({ timeout: 1000 }).catch(() => false)) {
+        this.logger.info('Validation error "Select a value" detected, re-selecting schedule dropdowns...');
+
+        // Re-click "How often" dropdown to trigger Time zone auto-fill
+        const howOftenBtn = this.page.getByRole('button', { name: /how often/i });
+        if (await howOftenBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+          const howOftenText = (await howOftenBtn.textContent() || '').trim();
+          this.logger.info(`Re-selecting "How often" dropdown (current: "${howOftenText}")`);
+          await this.selectFirstDropdownOption(howOftenBtn, 'How often');
+          await this.waiter.delay(1000);
+        }
+
+        // If Time zone still shows "Select time zone", select it directly
+        const tzBtn = this.page.getByRole('button', { name: /time zone.*select/i });
+        if (await tzBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+          this.logger.info('Time zone still unselected, selecting directly...');
+          await this.selectFirstDropdownOption(tzBtn, 'Time zone');
         }
       }
 
@@ -321,8 +359,17 @@ export class AppCatalogPage extends BasePage {
     await installButton.waitFor({ state: 'visible', timeout: 30000 });
     await installButton.waitFor({ state: 'attached', timeout: 5000 });
 
-    // Delay for form to enable button (longer on CI)
-    await this.waiter.delay(3000);
+    // Wait for button to be enabled (CI is slower to validate form fields)
+    const delay = config.isCI ? 5000 : 3000;
+    await this.waiter.delay(delay);
+
+    // Verify button is not disabled before clicking
+    const isDisabled = await installButton.isDisabled().catch(() => false);
+    if (isDisabled) {
+      this.logger.info('Install button is disabled, waiting for it to become enabled...');
+      await installButton.waitFor({ state: 'visible', timeout: 15000 });
+      await this.waiter.delay(3000);
+    }
 
     await this.smartClick(installButton, 'Install button');
     this.logger.info('Clicked Save and install button');
@@ -334,76 +381,77 @@ export class AppCatalogPage extends BasePage {
   private async waitForInstallation(appName: string): Promise<void> {
     this.logger.info('Waiting for installation to complete...');
 
-    // Wait for URL to change or network to settle
-    await Promise.race([
-      this.page.waitForURL(/\/foundry\/(app-catalog|home)/, { timeout: 30000 }),
-      this.page.waitForLoadState('networkidle', { timeout: 30000 })
-    ]).catch(() => {});
-
-    // Look for first "installing" message
+    // Wait for all possible outcomes simultaneously - don't block on URL/networkidle
+    // first since the "installing" toast could appear and disappear during that window.
     const installingMessage = this.page.getByText(/installing/i).first();
-
-    try {
-      await installingMessage.waitFor({ state: 'visible', timeout: 180000 });
-      this.logger.success('Installation started - "installing" message appeared');
-    } catch (error) {
-      throw new Error(`Installation failed to start for app '${appName}' - "installing" message never appeared. Installation may have failed immediately.`);
-    }
-
-    // Wait for second toast with final status (installed or error)
-    // Match exact toast messages using app name
     const installedMessage = this.page.getByText(`${appName} installed`).first();
     const errorMessage = this.page.getByText(`Error installing ${appName}`).first();
 
     try {
       const result = await Promise.race([
-        installedMessage.waitFor({ state: 'visible', timeout: 120000 }).then(() => 'success'),
+        installingMessage.waitFor({ state: 'visible', timeout: 120000 }).then(() => 'installing'),
+        installedMessage.waitFor({ state: 'visible', timeout: 120000 }).then(() => 'installed'),
         errorMessage.waitFor({ state: 'visible', timeout: 120000 }).then(() => 'error')
       ]);
 
       if (result === 'error') {
-        // Get the actual error message from the toast and clean up formatting
         const errorText = await errorMessage.textContent();
         const cleanError = errorText?.replace(/\s+/g, ' ').trim() || 'Unknown error';
         throw new Error(`Installation failed for app '${appName}': ${cleanError}`);
       }
-      this.logger.success('Installation completed successfully - "installed" message appeared');
+
+      if (result === 'installing') {
+        this.logger.success('Installation started - "installing" message appeared');
+
+        // Now wait for final status
+        try {
+          const finalResult = await Promise.race([
+            installedMessage.waitFor({ state: 'visible', timeout: 120000 }).then(() => 'success'),
+            errorMessage.waitFor({ state: 'visible', timeout: 120000 }).then(() => 'error')
+          ]);
+
+          if (finalResult === 'error') {
+            const errorText = await errorMessage.textContent();
+            const cleanError = errorText?.replace(/\s+/g, ' ').trim() || 'Unknown error';
+            throw new Error(`Installation failed for app '${appName}': ${cleanError}`);
+          }
+        } catch (error) {
+          if (error.message.includes('Installation failed')) throw error;
+          throw new Error(`Installation status unclear for app '${appName}' - timed out waiting for final status`);
+        }
+      }
+
+      this.logger.success('Installation completed successfully');
     } catch (error) {
-      if (error.message.includes('Installation failed')) {
+      if (error.message.includes('Installation failed') || error.message.includes('Installation status unclear')) {
         throw error;
       }
-      throw new Error(`Installation status unclear for app '${appName}' - timed out waiting for "installed" or "error" message after 120 seconds`);
-    }
-    // Brief catalog status check (5-10s) - "installed" toast is the real signal
-    // This is just for logging/verification, not a hard requirement
-    this.logger.info('Checking catalog status briefly (installation already confirmed by toast)...');
 
-    // Navigate directly to app catalog with search query
+      // Take a screenshot to help debug CI failures
+      await this.page.screenshot({ path: `test-results/install-timeout-${Date.now()}.png`, fullPage: true }).catch(() => {});
+      const currentUrl = this.page.url();
+      throw new Error(`Installation failed to start for app '${appName}' - no install messages appeared within 120s. Current URL: ${currentUrl}`);
+    }
+
+    // Brief catalog status check - toast is the real signal
+    this.logger.info('Checking catalog status briefly...');
     const baseUrl = new URL(this.page.url()).origin;
     await this.page.goto(`${baseUrl}/foundry/app-catalog?filter=name%3A~%27${appName}%27`);
     await this.page.waitForLoadState('networkidle');
 
-    // Check status a couple times (up to 10 seconds)
     const statusText = this.page.locator('[data-test-selector="status-text"]').filter({ hasText: /installed/i });
-    const maxAttempts = 2; // 2 attempts = up to 10 seconds
-
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const isVisible = await statusText.isVisible().catch(() => false);
-
-      if (isVisible) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (await statusText.isVisible().catch(() => false)) {
         this.logger.success('Catalog status verified - shows Installed');
         return;
       }
-
-      if (attempt < maxAttempts - 1) {
-        this.logger.info(`Catalog status not yet updated, waiting 5s before refresh (attempt ${attempt + 1}/${maxAttempts})...`);
+      if (attempt < 1) {
         await this.waiter.delay(5000);
         await this.page.reload({ waitUntil: 'domcontentloaded' });
       }
     }
 
-    // Don't fail - the "installed" toast is reliable enough
-    this.logger.info(`Catalog status not updated yet after ${maxAttempts * 5}s, but toast confirmed installation - continuing`);
+    this.logger.info('Catalog status not yet updated, but toast confirmed installation - continuing');
   }
 
   /**
