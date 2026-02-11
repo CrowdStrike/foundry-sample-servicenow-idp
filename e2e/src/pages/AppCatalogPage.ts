@@ -127,6 +127,25 @@ export class AppCatalogPage extends BasePage {
   }
 
   /**
+   * Click a dropdown button and select the first available option
+   */
+  private async selectFirstDropdownOption(button: any, label: string): Promise<void> {
+    try {
+      await button.click();
+      await this.waiter.delay(1000);
+
+      const option = this.page.locator('[role="option"], [role="menuitem"]').first();
+      if (await option.isVisible({ timeout: 3000 })) {
+        await option.click();
+        this.logger.info(`Selected option in dropdown [${label}]`);
+        await this.waiter.delay(500);
+      }
+    } catch (error) {
+      this.logger.info(`Could not select option in dropdown [${label}]: ${error.message}`);
+    }
+  }
+
+  /**
    * Get field context by looking at nearby labels and text
    */
   private async getFieldContext(input: any): Promise<string> {
@@ -230,7 +249,8 @@ export class AppCatalogPage extends BasePage {
       }
 
       // Fill select/dropdown fields (including Foundry custom dropdowns)
-      // Foundry uses button-based dropdowns with aria-haspopup
+      // Foundry uses button-based dropdowns - some have aria-haspopup, others are plain buttons
+      // with "Select" placeholder text (e.g., "Select time zone")
       const selectFields = this.page.locator('select, [role="combobox"], button[aria-haspopup="listbox"], button[aria-haspopup="menu"]');
       const selectCount = await selectFields.count();
       this.logger.info(`Found ${selectCount} select/dropdown fields`);
@@ -255,38 +275,56 @@ export class AppCatalogPage extends BasePage {
                 this.logger.info(`Selected option in select [${name || ariaLabel || 'unnamed'}]`);
               }
             }
-          } else if (tagName === 'button') {
-            // Foundry button-based dropdown - click button and select first option
-            try {
-              await select.click();
-              await this.waiter.delay(1000);
-
-              // Look for menu/listbox options
-              const option = this.page.locator('[role="option"], [role="menuitem"]').first();
-              if (await option.isVisible({ timeout: 2000 })) {
-                await option.click();
-                this.logger.info(`Selected option in button dropdown [${name || ariaLabel || 'unnamed'}]`);
-                await this.waiter.delay(500);
-              }
-            } catch (error) {
-              this.logger.info(`Could not select option in button dropdown [${name || ariaLabel || 'unnamed'}]: ${error.message}`);
-            }
           } else {
-            // Role="combobox" - click and select first option
-            try {
-              await select.click();
-              await this.waiter.delay(500);
-
-              // Look for listbox options
-              const option = this.page.locator('[role="option"]').first();
-              if (await option.isVisible({ timeout: 2000 })) {
-                await option.click();
-                this.logger.info(`Selected option in combobox [${name || ariaLabel || 'unnamed'}]`);
-              }
-            } catch (error) {
-              this.logger.info(`Could not select option in combobox [${name || ariaLabel || 'unnamed'}]: ${error.message}`);
-            }
+            // Button or combobox dropdown - click and select first option
+            await this.selectFirstDropdownOption(select, name || ariaLabel || 'unnamed');
           }
+        }
+      }
+
+      // Handle Foundry dropdowns that lack aria-haspopup
+      // Some dropdowns appear pre-filled (e.g., "How often" shows "Hourly") but need to be
+      // explicitly clicked to trigger dependent fields (e.g., Time zone auto-fill).
+      // Strategy: find ALL dropdown-like buttons in the form, click ones with "Select" placeholder,
+      // then re-click ones that appear filled if validation errors remain.
+      const allButtons = this.page.locator('button');
+      const buttonCount = await allButtons.count();
+
+      for (let i = 0; i < buttonCount; i++) {
+        const btn = allButtons.nth(i);
+        if (await btn.isVisible()) {
+          const hasPopup = await btn.getAttribute('aria-haspopup');
+          if (hasPopup) continue; // Already handled above
+
+          const btnText = (await btn.textContent() || '').trim();
+          if (/^select\s/i.test(btnText)) {
+            this.logger.info(`Found unselected dropdown: "${btnText}"`);
+            await this.selectFirstDropdownOption(btn, btnText);
+          }
+        }
+      }
+
+      // Check if validation errors remain (e.g., "Select a value" text visible)
+      // This handles cases where a dropdown like "How often" shows a default value (e.g., "Hourly")
+      // but was never explicitly selected, so dependent fields (Time zone) aren't populated.
+      const validationError = this.page.getByText('Select a value');
+      if (await validationError.isVisible({ timeout: 1000 }).catch(() => false)) {
+        this.logger.info('Validation error "Select a value" detected, re-selecting schedule dropdowns...');
+
+        // Re-click "How often" dropdown to trigger Time zone auto-fill
+        const howOftenBtn = this.page.getByRole('button', { name: /how often/i });
+        if (await howOftenBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+          const howOftenText = (await howOftenBtn.textContent() || '').trim();
+          this.logger.info(`Re-selecting "How often" dropdown (current: "${howOftenText}")`);
+          await this.selectFirstDropdownOption(howOftenBtn, 'How often');
+          await this.waiter.delay(1000);
+        }
+
+        // If Time zone still shows "Select time zone", select it directly
+        const tzBtn = this.page.getByRole('button', { name: /time zone.*select/i });
+        if (await tzBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+          this.logger.info('Time zone still unselected, selecting directly...');
+          await this.selectFirstDropdownOption(tzBtn, 'Time zone');
         }
       }
 
