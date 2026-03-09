@@ -58,10 +58,6 @@ def fetch_and_process_servicenow_records(request, logger=None):
         # latestSysUpdatedOn to be used to get new records
         latest_sys_updated_on = request.body.get('latestSysUpdatedOn', "")
 
-        # retirement column names
-        user_retired_column = request.body.get('userRetired', "")
-        app_retired_column = request.body.get('appRetired', "")
-
         # record filter query. by default, it's ordered by 'sys_updated_on' field
         query = request.body.get('sysParamQuery', f"sys_updated_on>={latest_sys_updated_on}")
         query +="^ORDERBYsys_updated_on"
