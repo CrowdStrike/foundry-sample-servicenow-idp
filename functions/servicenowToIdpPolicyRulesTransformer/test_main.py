@@ -83,6 +83,28 @@ class FnTestCase(unittest.TestCase):
         self.assertEqual(transform_request.result['id'], '12345')
         self.assertEqual(transform_request.result['name'], 'Test Result')
 
+    def test_from_request_with_retirement_columns(self):
+        """Test TransformRequest.from_request parses retirement column fields."""
+        request_body = {
+            'latestSysUpdatedOn': '2025-05-15T10:30:00Z',
+            'cmdbAppNameColumn': 'app_name',
+            'userGuidColumn': 'user_id',
+            'hostGuidColumn': 'host_id',
+            'sysUpdatedOnColumn': 'updated_at',
+            'idpEnabledColumn': 'idp_enabled',
+            'idpActionColumn': 'idp_action',
+            'idpTriggerColumn': 'idp_trigger',
+            'idpRuleNamePrefix': 'SNOW_',
+            'idpSimulationModeColumn': 'idp_simulation_mode',
+            'userRetiredColumn': 'u_svc_retired',
+            'appRetiredColumn': 'u_server_retired',
+            'result': {'result': {}}
+        }
+        transform_request = main.TransformRequest.from_request(request_body)
+
+        self.assertEqual(transform_request.user_retired_column, 'u_svc_retired')
+        self.assertEqual(transform_request.app_retired_column, 'u_server_retired')
+
     def test_idp_create_rule(self):
         """test idp create rule data class"""
         # Sample JSON data
