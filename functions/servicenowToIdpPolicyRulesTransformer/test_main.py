@@ -589,7 +589,7 @@ class FnTestCase(unittest.TestCase):
         self.assertEqual(set(source_user_entity_id.include), {'user1', 'user2'})
         self.assertEqual(set(source_endpoint_entity_id.exclude), {'host1', 'host2'})
 
-    def test_copy_from_cmdb_response_removes_retired_users(self):
+    def test_apply_retirement_removals_removes_retired_users(self):
         """Test that retired user GUIDs are removed from sourceUser.entityId.include."""
         source_user_entity_id = main.FilterCriteria(include=['existing_user'])
         source_endpoint_entity_id = main.FilterCriteria(exclude=['existing_host'])
@@ -604,13 +604,16 @@ class FnTestCase(unittest.TestCase):
         main.copy_from_cmdb_response_to_idp_create_request(
             source_user_entity_id, source_endpoint_entity_id, entities
         )
+        main.apply_retirement_removals(
+            source_user_entity_id, source_endpoint_entity_id, entities
+        )
 
         self.assertIn('active_user', source_user_entity_id.include)
         self.assertNotIn('existing_user', source_user_entity_id.include)
         self.assertIn('existing_host', source_endpoint_entity_id.exclude)
         self.assertIn('active_host', source_endpoint_entity_id.exclude)
 
-    def test_copy_from_cmdb_response_removes_retired_hosts(self):
+    def test_apply_retirement_removals_removes_retired_hosts(self):
         """Test that retired host GUIDs are removed from sourceEndpoint.entityId.exclude."""
         source_user_entity_id = main.FilterCriteria(include=['existing_user'])
         source_endpoint_entity_id = main.FilterCriteria(exclude=['existing_host'])
@@ -623,6 +626,9 @@ class FnTestCase(unittest.TestCase):
         }
 
         main.copy_from_cmdb_response_to_idp_create_request(
+            source_user_entity_id, source_endpoint_entity_id, entities
+        )
+        main.apply_retirement_removals(
             source_user_entity_id, source_endpoint_entity_id, entities
         )
 
@@ -1224,6 +1230,88 @@ class FnTestCase(unittest.TestCase):
         mock_identity_protection.delete_policy_rules.assert_not_called()
         self.assertEqual(response.body['new'], 0)
         self.assertEqual(response.body['deleted'], 0)
+
+    @patch('main.IdentityProtection')
+    def test_transform_rules_partial_retirement_preserves_existing_rule(self, mock_idp_class):
+        """Test that partial retirement of an existing rule updates it, not deletes it.
+
+        Scenario: Existing rule has user1, user3 and host1, host3. Batch retires user1/host1.
+        After merge+retirement: user3/host3 remain. Rule should be updated, not deleted.
+        """
+        mock_identity_protection = MagicMock()
+        mock_idp_class.return_value = mock_identity_protection
+
+        # Query returns existing rule ID
+        mock_identity_protection.query_policy_rules.return_value = {
+            'status_code': 200,
+            'body': {'resources': ['existing_rule_id']}
+        }
+        # Existing rule has user1, user3, host1, host3
+        mock_identity_protection.get_policy_rules.return_value = {
+            'status_code': 200,
+            'body': {
+                'resources': [{
+                    'ruleConditions': [{
+                        'sourceUser': {
+                            'entityId': {'options': {'user1': 'INCLUDED', 'user3': 'INCLUDED'}}
+                        },
+                        'sourceEndpoint': {
+                            'entityId': {'options': {'host1': 'EXCLUDED', 'host3': 'EXCLUDED'}}
+                        }
+                    }]
+                }]
+            }
+        }
+        # Delete + create succeed
+        mock_identity_protection.delete_policy_rules.return_value = {'status_code': 200}
+        mock_identity_protection.create_policy_rule.return_value = {'status_code': 200}
+
+        request = Request()
+        request.access_token = 'test_token'
+        request.body = {
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'cmdbAppNameColumn': 'u_cmdb_app_name',
+            'userGuidColumn': 'u_user_guid',
+            'hostGuidColumn': 'u_host_guid',
+            'sysUpdatedOnColumn': 'sys_updated_on',
+            'idpEnabledColumn': 'u_idp_rule_enabled',
+            'idpActionColumn': 'u_idp_rule_action',
+            'idpTriggerColumn': 'u_idp_rule_trigger',
+            'idpRuleNamePrefix': 'ServiceNow_',
+            'idpSimulationModeColumn': 'u_idp_rule_simulation_mode',
+            'userRetiredColumn': 'u_svc_retired',
+            'appRetiredColumn': 'u_server_retired'
+        }
+
+        # Batch retires user1 and host1 only
+        result_data = [{
+            'u_cmdb_app_name': 'App1',
+            'u_user_guid': 'user1',
+            'u_host_guid': 'host1',
+            'sys_updated_on': '2025-05-13 20:09:59',
+            'u_idp_rule_enabled': 'true',
+            'u_idp_rule_simulation_mode': 'false',
+            'u_idp_rule_action': 'BLOCK',
+            'u_idp_rule_trigger': 'access',
+            'u_svc_retired': 'true',
+            'u_server_retired': 'true'
+        }]
+        response_body = main.initialize_response_body()
+
+        response = main._transform_rules(self.logger, request, result_data, response_body)
+
+        self.assertEqual(response.code, 200)
+        # Rule should be UPDATED (delete + create), not just deleted
+        self.assertEqual(response.body['deleted'], 0)
+        self.assertEqual(response.body['updated'], 1)
+        mock_identity_protection.create_policy_rule.assert_called_once()
+        # Verify the created rule contains user3 and host3 but NOT user1 and host1
+        call_args = mock_identity_protection.create_policy_rule.call_args
+        rule_body = call_args[1]['body']
+        self.assertIn('user3', rule_body['sourceUser']['entityId']['include'])
+        self.assertNotIn('user1', rule_body['sourceUser']['entityId']['include'])
+        self.assertIn('host3', rule_body['sourceEndpoint']['entityId']['exclude'])
+        self.assertNotIn('host1', rule_body['sourceEndpoint']['entityId']['exclude'])
 
     def test_merge_apps_access_mixed_batch(self):
         """Test merge_apps_access with mix of active and retired records for same app."""
