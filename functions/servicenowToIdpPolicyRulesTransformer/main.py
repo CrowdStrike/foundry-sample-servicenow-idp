@@ -221,10 +221,6 @@ def _transform_rules(logger, request, result_data, response_body):
                                                       idp_create_rule_request.source_endpoint.entity_id,
                                                       access)
 
-        # Check if rule is empty after applying retirements
-        is_empty_rule = (not idp_create_rule_request.source_user.entity_id.include and
-                         not idp_create_rule_request.source_endpoint.entity_id.exclude)
-
         rule_conditions = None
         # Get policy rule details
         rule_conditions, errs = get_idp_policy_rule_details(identity_protection, idp_policy_rule_id, logger,
@@ -239,6 +235,19 @@ def _transform_rules(logger, request, result_data, response_body):
             break
         if 'idpPolicyRuleId' in response_body:
             response_body.pop('idpPolicyRuleId')
+
+        # Merge existing rule conditions before applying retirement removals
+        if rule_conditions is not None:
+            merge_existing_rule_conditions(rule_conditions, idp_create_rule_request)
+
+        # Apply retirement removals after all merges (batch + existing rule)
+        apply_retirement_removals(idp_create_rule_request.source_user.entity_id,
+                                  idp_create_rule_request.source_endpoint.entity_id,
+                                  access)
+
+        # Check if rule is empty after applying retirements
+        is_empty_rule = (not idp_create_rule_request.source_user.entity_id.include and
+                         not idp_create_rule_request.source_endpoint.entity_id.exclude)
 
         if rule_conditions is not None:
             if is_empty_rule:
@@ -260,8 +269,8 @@ def _transform_rules(logger, request, result_data, response_body):
                     latest_sys_updated_on = access['latestSysUpdatedOn']
                 continue
 
-            if update_idp_rule(rule_conditions, idp_create_rule_request, identity_protection, idp_policy_rule_id,
-                               idp_policy_rule_name, response_body, logger) != 200:
+            if delete_existing_idp_rule(identity_protection, idp_policy_rule_id,
+                                        idp_policy_rule_name, response_body, logger) != 200:
                 status_code = 502
                 break
             operation_type = 'UPDATED'
@@ -345,15 +354,11 @@ def initialize_response_body() -> dict:
     }
 
 
-def update_idp_rule(rule_conditions, idp_create_rule_request, identity_protection, idp_policy_rule_id,
-                    idp_policy_rule_name, response_body, logger) -> int:
+def merge_existing_rule_conditions(rule_conditions, idp_create_rule_request):
     """
-    Update an existing IDP policy rule.
+    Merge existing IDP policy rule conditions into the create request.
     """
-    status_code = 200
-    # Process rule conditions
     for condition in rule_conditions:
-        # Copy from existing condition to idp create request
         if 'sourceEndpoint' in condition:
             if 'entityId' in condition['sourceEndpoint']:
                 add_to_idp_request_from_rule_condition(idp_create_rule_request.source_endpoint.entity_id,
@@ -377,7 +382,12 @@ def update_idp_rule(rule_conditions, idp_create_rule_request, identity_protectio
                 add_to_idp_request_from_rule_condition(idp_create_rule_request.destination.group_membership,
                                                        condition['destination']['groupMembership'])
 
-    # Delete existing policy
+
+def delete_existing_idp_rule(identity_protection, idp_policy_rule_id, idp_policy_rule_name, response_body, logger) -> int:
+    """
+    Delete an existing IDP policy rule.
+    """
+    status_code = 200
     deleted_rules = identity_protection.delete_policy_rules(parameters={'ids': idp_policy_rule_id})
     if deleted_rules['status_code'] != 200:
         errs = deleted_rules['body']['errors'] if deleted_rules and 'body' in deleted_rules and 'errors' in \
@@ -390,6 +400,15 @@ def update_idp_rule(rule_conditions, idp_create_rule_request, identity_protectio
         status_code = 502
     logger.info("deleted policy - " + str(idp_policy_rule_id))
     return status_code
+
+
+def update_idp_rule(rule_conditions, idp_create_rule_request, identity_protection, idp_policy_rule_id,
+                    idp_policy_rule_name, response_body, logger) -> int:
+    """
+    Update an existing IDP policy rule.
+    """
+    merge_existing_rule_conditions(rule_conditions, idp_create_rule_request)
+    return delete_existing_idp_rule(identity_protection, idp_policy_rule_id, idp_policy_rule_name, response_body, logger)
 
 
 def create_idp_rule(identity_protection, idp_create_rule_request, response_body, idp_policy_rule_name, logger) -> int:
@@ -602,7 +621,11 @@ def copy_from_cmdb_response_to_idp_create_request(source_user_entity_id, source_
     source_user_entity_id.include = merge_lists_unique_ordered(source_user_entity_id.include,
                                                                list(entities['user_guid']))
 
-    # Remove retired GUIDs
+
+def apply_retirement_removals(source_user_entity_id, source_endpoint_entity_id, entities):
+    """
+       Remove retired GUIDs from the IDP policy rule request after all merges are complete.
+    """
     retired_users = entities.get('retired_user_guid', set())
     retired_hosts = entities.get('retired_host_guid', set())
 
