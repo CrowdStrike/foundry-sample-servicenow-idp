@@ -69,16 +69,16 @@
       "type": "string",
       "description": "ServiceNow next page URL"
     },
-    "userRetiredColumn": {
+    "userRetired": {
       "type": "string",
       "description": "Column indicating user/service retirement status in ServiceNow CMDB"
     },
-    "appRetiredColumn": {
+    "appRetired": {
       "type": "string",
       "description": "Column indicating server/host retirement status in ServiceNow CMDB"
     }
   },
   "type": "object",
   "description": "This generated schema may need tweaking. In particular format fields are attempts at matching workflow field types but may not be correct.",
-  "required": ["cmdbAppNameColumn", "userGuidColumn", "hostGuidColumn", "sysUpdatedOnColumn", "idpEnabledColumn", "idpSimulationModeColumn", "idpActionColumn", "idpTriggerColumn", "idpRuleNamePrefix", "apiDefinitionId", "apiOperationId", "tableName", "userRetiredColumn", "appRetiredColumn"]
+  "required": ["cmdbAppNameColumn", "userGuidColumn", "hostGuidColumn", "sysUpdatedOnColumn", "idpEnabledColumn", "idpSimulationModeColumn", "idpActionColumn", "idpTriggerColumn", "idpRuleNamePrefix", "apiDefinitionId", "apiOperationId", "tableName", "userRetired", "appRetired"]
 }
