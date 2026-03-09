@@ -183,7 +183,7 @@ def get_servicenow_data(logger, definition_id, operation_id, table_name, query, 
     return response
 
 
-def _transform_rules(logger, request, result_data, response_body):
+def _transform_rules(logger, request, result_data, response_body):  # pylint: disable=too-many-branches,too-many-statements
     transform_request = TransformRequest.from_request(request.body)
     transform_request.result = result_data
     latest_sys_updated_on = transform_request.latest_sys_updated_on
@@ -249,11 +249,16 @@ def _transform_rules(logger, request, result_data, response_body):
                 # Rule exists but would be empty after retirements — delete it
                 deleted_rules = identity_protection.delete_policy_rules(parameters={'ids': idp_policy_rule_id})
                 if deleted_rules['status_code'] != 200:
-                    errs = deleted_rules['body']['errors'] if deleted_rules and 'body' in deleted_rules and 'errors' in deleted_rules['body'] else None
+                    errs = (deleted_rules['body']['errors']
+                            if deleted_rules and 'body' in deleted_rules
+                            and 'errors' in deleted_rules['body'] else None)
                     logger.error("Error deleting empty IDP policy rule: %s", errs)
                     response_body['errors']['errs'] = errs
-                    response_body['errors']['description'] = ("Error deleting empty IDP policy rule for ID - " + idp_policy_rule_id
-                                                              + " and policy rule name - " + idp_policy_rule_name)
+                    response_body['errors']['description'] = (
+                        "Error deleting empty IDP policy rule for ID - "
+                        + idp_policy_rule_id
+                        + " and policy rule name - "
+                        + idp_policy_rule_name)
                     status_code = 502
                     break
                 logger.info("Deleted empty policy rule after retirements - " + idp_policy_rule_name)
@@ -665,7 +670,7 @@ def merge_lists_unique_ordered(list1, list2):
 
 
 @dataclass
-class TransformRequest:
+class TransformRequest:  # pylint: disable=too-many-instance-attributes
     """Configuration class to hold request parameters."""
     result: Dict[str, Any]
     latest_sys_updated_on: str
