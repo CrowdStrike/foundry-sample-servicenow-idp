@@ -58,6 +58,10 @@ def fetch_and_process_servicenow_records(request, logger=None):
         # latestSysUpdatedOn to be used to get new records
         latest_sys_updated_on = request.body.get('latestSysUpdatedOn', "")
 
+        # retirement column names
+        user_retired_column = request.body.get('userRetiredColumn', "")
+        app_retired_column = request.body.get('appRetiredColumn', "")
+
         # record filter query. by default, it's ordered by 'sys_updated_on' field
         query = request.body.get('sysParamQuery', f"sys_updated_on>={latest_sys_updated_on}")
         query +="^ORDERBYsys_updated_on"
@@ -71,10 +75,11 @@ def fetch_and_process_servicenow_records(request, logger=None):
 
         response_body = initialize_response_body()
 
-        if not all([definition_id, operation_id, table_name, latest_sys_updated_on]):
+        if not all([definition_id, operation_id, table_name, latest_sys_updated_on, user_retired_column, app_retired_column]):
             response_body['errors']['description'] = (
                 "Missing required configuration: apiIntegrationDefinitionId, "
-                "apiIntegrationOperationId, tableName, latestSysUpdatedOn"
+                "apiIntegrationOperationId, tableName, latestSysUpdatedOn, "
+                "userRetiredColumn, appRetiredColumn"
             )
             return Response(body=response_body, code=400)
 
