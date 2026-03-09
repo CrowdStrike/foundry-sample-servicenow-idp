@@ -660,7 +660,9 @@ class FnTestCase(unittest.TestCase):
             idp_action_column='u_idp_rule_action',
             idp_trigger_column='u_idp_rule_trigger',
             idp_rule_name_prefix='ServiceNow_',
-            idp_simulation_mode_column='u_idp_rule_simulation_mode'
+            idp_simulation_mode_column='u_idp_rule_simulation_mode',
+            user_retired_column='u_svc_retired',
+            app_retired_column='u_server_retired'
         )
         response_body = main.initialize_response_body()
 
@@ -687,7 +689,9 @@ class FnTestCase(unittest.TestCase):
             idp_action_column='u_idp_rule_action',
             idp_trigger_column='u_idp_rule_trigger',
             idp_rule_name_prefix='ServiceNow_',
-            idp_simulation_mode_column='u_idp_rule_simulation_mode'
+            idp_simulation_mode_column='u_idp_rule_simulation_mode',
+            user_retired_column='u_svc_retired',
+            app_retired_column='u_server_retired'
         )
         response_body = main.initialize_response_body()
 
@@ -872,7 +876,9 @@ class FnTestCase(unittest.TestCase):
             idp_action_column='u_idp_rule_action',
             idp_trigger_column='u_idp_rule_trigger',
             idp_rule_name_prefix='ServiceNow_',
-            idp_simulation_mode_column='u_idp_rule_simulation_mode'
+            idp_simulation_mode_column='u_idp_rule_simulation_mode',
+            user_retired_column='u_svc_retired',
+            app_retired_column='u_server_retired'
         )
         response_body = main.initialize_response_body()
 
@@ -882,6 +888,132 @@ class FnTestCase(unittest.TestCase):
         self.assertEqual(result, {})
         # Should increment ignoredSysIdCount
         self.assertEqual(response_body['ignoredSysIdCount'], 1)
+
+    def test_merge_apps_access_retired_user(self):
+        """Test merge_apps_access routes retired user to retired_user_guid set."""
+        transform_request = main.TransformRequest(
+            result=[{
+                'u_cmdb_app_name': 'App1',
+                'u_user_guid': 'user1',
+                'u_host_guid': 'host1',
+                'sys_updated_on': '2025-05-13 20:09:59',
+                'u_idp_rule_enabled': 'true',
+                'u_idp_rule_simulation_mode': 'false',
+                'u_idp_rule_action': 'BLOCK',
+                'u_idp_rule_trigger': 'access',
+                'u_svc_retired': 'true',
+                'u_server_retired': 'false'
+            }],
+            latest_sys_updated_on='2025-05-12 18:53:31',
+            cmdb_app_name_column='u_cmdb_app_name',
+            user_guid_column='u_user_guid',
+            host_guid_column='u_host_guid',
+            sys_updated_on_column='sys_updated_on',
+            idp_enabled_column='u_idp_rule_enabled',
+            idp_action_column='u_idp_rule_action',
+            idp_trigger_column='u_idp_rule_trigger',
+            idp_rule_name_prefix='ServiceNow_',
+            idp_simulation_mode_column='u_idp_rule_simulation_mode',
+            user_retired_column='u_svc_retired',
+            app_retired_column='u_server_retired'
+        )
+        response_body = main.initialize_response_body()
+
+        result = main.merge_apps_access(self.logger, transform_request, response_body)
+
+        self.assertIn('user1', result['ServiceNow_App1']['retired_user_guid'])
+        self.assertNotIn('user1', result['ServiceNow_App1']['user_guid'])
+        self.assertIn('host1', result['ServiceNow_App1']['host_guid'])
+        self.assertNotIn('host1', result['ServiceNow_App1']['retired_host_guid'])
+
+    def test_merge_apps_access_retired_host(self):
+        """Test merge_apps_access routes retired host to retired_host_guid set."""
+        transform_request = main.TransformRequest(
+            result=[{
+                'u_cmdb_app_name': 'App1',
+                'u_user_guid': 'user1',
+                'u_host_guid': 'host1',
+                'sys_updated_on': '2025-05-13 20:09:59',
+                'u_idp_rule_enabled': 'true',
+                'u_idp_rule_simulation_mode': 'false',
+                'u_idp_rule_action': 'BLOCK',
+                'u_idp_rule_trigger': 'access',
+                'u_svc_retired': 'false',
+                'u_server_retired': 'true'
+            }],
+            latest_sys_updated_on='2025-05-12 18:53:31',
+            cmdb_app_name_column='u_cmdb_app_name',
+            user_guid_column='u_user_guid',
+            host_guid_column='u_host_guid',
+            sys_updated_on_column='sys_updated_on',
+            idp_enabled_column='u_idp_rule_enabled',
+            idp_action_column='u_idp_rule_action',
+            idp_trigger_column='u_idp_rule_trigger',
+            idp_rule_name_prefix='ServiceNow_',
+            idp_simulation_mode_column='u_idp_rule_simulation_mode',
+            user_retired_column='u_svc_retired',
+            app_retired_column='u_server_retired'
+        )
+        response_body = main.initialize_response_body()
+
+        result = main.merge_apps_access(self.logger, transform_request, response_body)
+
+        self.assertIn('host1', result['ServiceNow_App1']['retired_host_guid'])
+        self.assertNotIn('host1', result['ServiceNow_App1']['host_guid'])
+        self.assertIn('user1', result['ServiceNow_App1']['user_guid'])
+        self.assertNotIn('user1', result['ServiceNow_App1']['retired_user_guid'])
+
+    def test_merge_apps_access_conflict_last_write_wins(self):
+        """Test that for same GUID, latest sys_updated_on record wins."""
+        transform_request = main.TransformRequest(
+            result=[
+                {
+                    'u_cmdb_app_name': 'App1',
+                    'u_user_guid': 'user1',
+                    'u_host_guid': 'host1',
+                    'sys_updated_on': '2025-05-13 20:00:00',
+                    'u_idp_rule_enabled': 'true',
+                    'u_idp_rule_simulation_mode': 'false',
+                    'u_idp_rule_action': 'BLOCK',
+                    'u_idp_rule_trigger': 'access',
+                    'u_svc_retired': 'false',
+                    'u_server_retired': 'false'
+                },
+                {
+                    'u_cmdb_app_name': 'App1',
+                    'u_user_guid': 'user1',
+                    'u_host_guid': 'host1',
+                    'sys_updated_on': '2025-05-13 21:00:00',
+                    'u_idp_rule_enabled': 'true',
+                    'u_idp_rule_simulation_mode': 'false',
+                    'u_idp_rule_action': 'BLOCK',
+                    'u_idp_rule_trigger': 'access',
+                    'u_svc_retired': 'true',
+                    'u_server_retired': 'true'
+                }
+            ],
+            latest_sys_updated_on='2025-05-12 18:53:31',
+            cmdb_app_name_column='u_cmdb_app_name',
+            user_guid_column='u_user_guid',
+            host_guid_column='u_host_guid',
+            sys_updated_on_column='sys_updated_on',
+            idp_enabled_column='u_idp_rule_enabled',
+            idp_action_column='u_idp_rule_action',
+            idp_trigger_column='u_idp_rule_trigger',
+            idp_rule_name_prefix='ServiceNow_',
+            idp_simulation_mode_column='u_idp_rule_simulation_mode',
+            user_retired_column='u_svc_retired',
+            app_retired_column='u_server_retired'
+        )
+        response_body = main.initialize_response_body()
+
+        result = main.merge_apps_access(self.logger, transform_request, response_body)
+
+        # Second record (later timestamp) marks both as retired — last write wins
+        self.assertIn('user1', result['ServiceNow_App1']['retired_user_guid'])
+        self.assertNotIn('user1', result['ServiceNow_App1']['user_guid'])
+        self.assertIn('host1', result['ServiceNow_App1']['retired_host_guid'])
+        self.assertNotIn('host1', result['ServiceNow_App1']['host_guid'])
 
     def test_get_servicenow_data_function(self):
         """Test get_servicenow_data function structure"""
