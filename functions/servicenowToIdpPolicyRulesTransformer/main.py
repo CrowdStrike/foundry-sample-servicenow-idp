@@ -59,8 +59,8 @@ def fetch_and_process_servicenow_records(request, logger=None):
         latest_sys_updated_on = request.body.get('latestSysUpdatedOn', "")
 
         # retirement column names
-        user_retired_column = request.body.get('userRetiredColumn', "")
-        app_retired_column = request.body.get('appRetiredColumn', "")
+        user_retired_column = request.body.get('userRetired', "")
+        app_retired_column = request.body.get('appRetired', "")
 
         # record filter query. by default, it's ordered by 'sys_updated_on' field
         query = request.body.get('sysParamQuery', f"sys_updated_on>={latest_sys_updated_on}")
@@ -75,11 +75,10 @@ def fetch_and_process_servicenow_records(request, logger=None):
 
         response_body = initialize_response_body()
 
-        if not all([definition_id, operation_id, table_name, latest_sys_updated_on, user_retired_column, app_retired_column]):
+        if not all([definition_id, operation_id, table_name, latest_sys_updated_on]):
             response_body['errors']['description'] = (
                 "Missing required configuration: apiIntegrationDefinitionId, "
-                "apiIntegrationOperationId, tableName, latestSysUpdatedOn, "
-                "userRetiredColumn, appRetiredColumn"
+                "apiIntegrationOperationId, tableName, latestSysUpdatedOn"
             )
             return Response(body=response_body, code=400)
 
@@ -704,8 +703,8 @@ class TransformRequest:
             idp_trigger_column=request_body.get('idpTriggerColumn'),
             idp_rule_name_prefix=request_body.get('idpRuleNamePrefix'),
             idp_simulation_mode_column=request_body.get('idpSimulationModeColumn'),
-            user_retired_column=request_body.get('userRetiredColumn', ''),
-            app_retired_column=request_body.get('appRetiredColumn', ''),
+            user_retired_column=request_body.get('userRetired', ''),
+            app_retired_column=request_body.get('appRetired', ''),
         )
 
 

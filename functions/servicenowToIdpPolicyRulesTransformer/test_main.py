@@ -96,8 +96,8 @@ class FnTestCase(unittest.TestCase):
             'idpTriggerColumn': 'idp_trigger',
             'idpRuleNamePrefix': 'SNOW_',
             'idpSimulationModeColumn': 'idp_simulation_mode',
-            'userRetiredColumn': 'u_svc_retired',
-            'appRetiredColumn': 'u_server_retired',
+            'userRetired': 'u_svc_retired',
+            'appRetired': 'u_server_retired',
             'result': {'result': {}}
         }
         transform_request = main.TransformRequest.from_request(request_body)
@@ -227,8 +227,8 @@ class FnTestCase(unittest.TestCase):
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
             'latestSysUpdatedOn': '2025-05-12 18:53:31',
-            'userRetiredColumn': 'u_svc_retired',
-            'appRetiredColumn': 'u_server_retired'
+            'userRetired': 'u_svc_retired',
+            'appRetired': 'u_server_retired'
         }
 
         # Mock successful ServiceNow API response with no pagination
@@ -273,8 +273,8 @@ class FnTestCase(unittest.TestCase):
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
             'latestSysUpdatedOn': '2025-05-12 18:53:31',
-            'userRetiredColumn': 'u_svc_retired',
-            'appRetiredColumn': 'u_server_retired',
+            'userRetired': 'u_svc_retired',
+            'appRetired': 'u_server_retired',
             'serviceNowNextPageURL': 'https://example.com/api?sysparm_offset=10'
         }
 
@@ -317,8 +317,8 @@ class FnTestCase(unittest.TestCase):
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
             'latestSysUpdatedOn': '2025-05-12 18:53:31',
-            'userRetiredColumn': 'u_svc_retired',
-            'appRetiredColumn': 'u_server_retired',
+            'userRetired': 'u_svc_retired',
+            'appRetired': 'u_server_retired',
             'serviceNowNextPageURL': 'https://example.com/api?sysparm_offset=30'  # This matches the last URL
         }
 
@@ -355,8 +355,8 @@ class FnTestCase(unittest.TestCase):
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
             'latestSysUpdatedOn': '2025-05-12 18:53:31',
-            'userRetiredColumn': 'u_svc_retired',
-            'appRetiredColumn': 'u_server_retired'
+            'userRetired': 'u_svc_retired',
+            'appRetired': 'u_server_retired'
         }
 
         # Mock ServiceNow API error response
@@ -383,8 +383,8 @@ class FnTestCase(unittest.TestCase):
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
             'latestSysUpdatedOn': '2025-05-12 18:53:31',
-            'userRetiredColumn': 'u_svc_retired',
-            'appRetiredColumn': 'u_server_retired'
+            'userRetired': 'u_svc_retired',
+            'appRetired': 'u_server_retired'
         }
 
         # Mock an exception during API call
@@ -406,8 +406,8 @@ class FnTestCase(unittest.TestCase):
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
             'latestSysUpdatedOn': '2025-05-12 18:53:31',
-            'userRetiredColumn': 'u_svc_retired',
-            'appRetiredColumn': 'u_server_retired'
+            'userRetired': 'u_svc_retired',
+            'appRetired': 'u_server_retired'
         }
 
         # Mock successful ServiceNow API response with empty results
@@ -1152,8 +1152,8 @@ class FnTestCase(unittest.TestCase):
             'idpTriggerColumn': 'u_idp_rule_trigger',
             'idpRuleNamePrefix': 'ServiceNow_',
             'idpSimulationModeColumn': 'u_idp_rule_simulation_mode',
-            'userRetiredColumn': 'u_svc_retired',
-            'appRetiredColumn': 'u_server_retired'
+            'userRetired': 'u_svc_retired',
+            'appRetired': 'u_server_retired'
         }
 
         # All GUIDs retired
@@ -1204,8 +1204,8 @@ class FnTestCase(unittest.TestCase):
             'idpTriggerColumn': 'u_idp_rule_trigger',
             'idpRuleNamePrefix': 'ServiceNow_',
             'idpSimulationModeColumn': 'u_idp_rule_simulation_mode',
-            'userRetiredColumn': 'u_svc_retired',
-            'appRetiredColumn': 'u_server_retired'
+            'userRetired': 'u_svc_retired',
+            'appRetired': 'u_server_retired'
         }
 
         result_data = [{
@@ -1279,8 +1279,8 @@ class FnTestCase(unittest.TestCase):
             'idpTriggerColumn': 'u_idp_rule_trigger',
             'idpRuleNamePrefix': 'ServiceNow_',
             'idpSimulationModeColumn': 'u_idp_rule_simulation_mode',
-            'userRetiredColumn': 'u_svc_retired',
-            'appRetiredColumn': 'u_server_retired'
+            'userRetired': 'u_svc_retired',
+            'appRetired': 'u_server_retired'
         }
 
         # Batch retires user1 and host1 only
@@ -1380,8 +1380,8 @@ class FnTestCase(unittest.TestCase):
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
             'latestSysUpdatedOn': '2025-05-12 18:53:31',
-            'userRetiredColumn': 'u_svc_retired',
-            'appRetiredColumn': 'u_server_retired'
+            'userRetired': 'u_svc_retired',
+            'appRetired': 'u_server_retired'
         }
 
         # Test with non-empty config
