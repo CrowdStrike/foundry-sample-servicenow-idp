@@ -1225,6 +1225,65 @@ class FnTestCase(unittest.TestCase):
         self.assertEqual(response.body['new'], 0)
         self.assertEqual(response.body['deleted'], 0)
 
+    def test_merge_apps_access_mixed_batch(self):
+        """Test merge_apps_access with mix of active and retired records for same app."""
+        transform_request = main.TransformRequest(
+            result=[
+                {
+                    'u_cmdb_app_name': 'App1',
+                    'u_user_guid': 'user1',
+                    'u_host_guid': 'host1',
+                    'sys_updated_on': '2025-05-13 20:00:00',
+                    'u_idp_rule_enabled': 'true',
+                    'u_idp_rule_simulation_mode': 'false',
+                    'u_idp_rule_action': 'BLOCK',
+                    'u_idp_rule_trigger': 'access',
+                    'u_svc_retired': 'false',
+                    'u_server_retired': 'false'
+                },
+                {
+                    'u_cmdb_app_name': 'App1',
+                    'u_user_guid': 'user2',
+                    'u_host_guid': 'host2',
+                    'sys_updated_on': '2025-05-13 20:01:00',
+                    'u_idp_rule_enabled': 'true',
+                    'u_idp_rule_simulation_mode': 'false',
+                    'u_idp_rule_action': 'BLOCK',
+                    'u_idp_rule_trigger': 'access',
+                    'u_svc_retired': 'true',
+                    'u_server_retired': 'true'
+                }
+            ],
+            latest_sys_updated_on='2025-05-12 18:53:31',
+            cmdb_app_name_column='u_cmdb_app_name',
+            user_guid_column='u_user_guid',
+            host_guid_column='u_host_guid',
+            sys_updated_on_column='sys_updated_on',
+            idp_enabled_column='u_idp_rule_enabled',
+            idp_action_column='u_idp_rule_action',
+            idp_trigger_column='u_idp_rule_trigger',
+            idp_rule_name_prefix='ServiceNow_',
+            idp_simulation_mode_column='u_idp_rule_simulation_mode',
+            user_retired_column='u_svc_retired',
+            app_retired_column='u_server_retired'
+        )
+        response_body = main.initialize_response_body()
+
+        result = main.merge_apps_access(self.logger, transform_request, response_body)
+
+        app = result['ServiceNow_App1']
+        # user1/host1 are active
+        self.assertIn('user1', app['user_guid'])
+        self.assertIn('host1', app['host_guid'])
+        # user2/host2 are retired
+        self.assertIn('user2', app['retired_user_guid'])
+        self.assertIn('host2', app['retired_host_guid'])
+        # No cross-contamination
+        self.assertNotIn('user1', app['retired_user_guid'])
+        self.assertNotIn('host1', app['retired_host_guid'])
+        self.assertNotIn('user2', app['user_guid'])
+        self.assertNotIn('host2', app['host_guid'])
+
     def test_get_table_data_transform_rules_with_config(self):
         """Test get_table_data_transform_rules with config parameter"""
         request = Request()
