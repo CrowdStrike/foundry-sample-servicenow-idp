@@ -1091,6 +1091,128 @@ class FnTestCase(unittest.TestCase):
         self.assertEqual(response_body['new'], 2)
         self.assertEqual(response_body['newPolicyRules'].count("TestRule1"), 1)
 
+    @patch('main.IdentityProtection')
+    def test_transform_rules_deletes_empty_rule_after_retirement(self, mock_idp_class):
+        """Test that _transform_rules deletes existing IDP rule when all GUIDs are retired."""
+        mock_identity_protection = MagicMock()
+        mock_idp_class.return_value = mock_identity_protection
+
+        # Query returns existing rule ID
+        mock_identity_protection.query_policy_rules.return_value = {
+            'status_code': 200,
+            'body': {'resources': ['existing_rule_id']}
+        }
+        # Get rule details returns existing conditions with one user and one host
+        mock_identity_protection.get_policy_rules.return_value = {
+            'status_code': 200,
+            'body': {
+                'resources': [{
+                    'ruleConditions': [{
+                        'sourceUser': {
+                            'entityId': {'options': {'user1': 'INCLUDED'}}
+                        },
+                        'sourceEndpoint': {
+                            'entityId': {'options': {'host1': 'EXCLUDED'}}
+                        }
+                    }]
+                }]
+            }
+        }
+        # Delete succeeds
+        mock_identity_protection.delete_policy_rules.return_value = {'status_code': 200}
+
+        request = Request()
+        request.access_token = 'test_token'
+        request.body = {
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'cmdbAppNameColumn': 'u_cmdb_app_name',
+            'userGuidColumn': 'u_user_guid',
+            'hostGuidColumn': 'u_host_guid',
+            'sysUpdatedOnColumn': 'sys_updated_on',
+            'idpEnabledColumn': 'u_idp_rule_enabled',
+            'idpActionColumn': 'u_idp_rule_action',
+            'idpTriggerColumn': 'u_idp_rule_trigger',
+            'idpRuleNamePrefix': 'ServiceNow_',
+            'idpSimulationModeColumn': 'u_idp_rule_simulation_mode',
+            'userRetiredColumn': 'u_svc_retired',
+            'appRetiredColumn': 'u_server_retired'
+        }
+
+        # All GUIDs retired
+        result_data = [{
+            'u_cmdb_app_name': 'App1',
+            'u_user_guid': 'user1',
+            'u_host_guid': 'host1',
+            'sys_updated_on': '2025-05-13 20:09:59',
+            'u_idp_rule_enabled': 'true',
+            'u_idp_rule_simulation_mode': 'false',
+            'u_idp_rule_action': 'BLOCK',
+            'u_idp_rule_trigger': 'access',
+            'u_svc_retired': 'true',
+            'u_server_retired': 'true'
+        }]
+        response_body = main.initialize_response_body()
+
+        response = main._transform_rules(self.logger, request, result_data, response_body)
+
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body['deleted'], 1)
+        self.assertIn('ServiceNow_App1', response.body['deletedPolicyRules'])
+        # create_policy_rule should NOT be called for empty rule
+        mock_identity_protection.create_policy_rule.assert_not_called()
+
+    @patch('main.IdentityProtection')
+    def test_transform_rules_skips_creation_for_new_empty_rule(self, mock_idp_class):
+        """Test that _transform_rules skips creation when a new rule would be empty (all retired)."""
+        mock_identity_protection = MagicMock()
+        mock_idp_class.return_value = mock_identity_protection
+
+        # No existing rule found
+        mock_identity_protection.query_policy_rules.return_value = {
+            'status_code': 404,
+            'body': {'resources': []}
+        }
+
+        request = Request()
+        request.access_token = 'test_token'
+        request.body = {
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'cmdbAppNameColumn': 'u_cmdb_app_name',
+            'userGuidColumn': 'u_user_guid',
+            'hostGuidColumn': 'u_host_guid',
+            'sysUpdatedOnColumn': 'sys_updated_on',
+            'idpEnabledColumn': 'u_idp_rule_enabled',
+            'idpActionColumn': 'u_idp_rule_action',
+            'idpTriggerColumn': 'u_idp_rule_trigger',
+            'idpRuleNamePrefix': 'ServiceNow_',
+            'idpSimulationModeColumn': 'u_idp_rule_simulation_mode',
+            'userRetiredColumn': 'u_svc_retired',
+            'appRetiredColumn': 'u_server_retired'
+        }
+
+        result_data = [{
+            'u_cmdb_app_name': 'App1',
+            'u_user_guid': 'user1',
+            'u_host_guid': 'host1',
+            'sys_updated_on': '2025-05-13 20:09:59',
+            'u_idp_rule_enabled': 'true',
+            'u_idp_rule_simulation_mode': 'false',
+            'u_idp_rule_action': 'BLOCK',
+            'u_idp_rule_trigger': 'access',
+            'u_svc_retired': 'true',
+            'u_server_retired': 'true'
+        }]
+        response_body = main.initialize_response_body()
+
+        response = main._transform_rules(self.logger, request, result_data, response_body)
+
+        self.assertEqual(response.code, 200)
+        # No rule created, no rule deleted (nothing existed)
+        mock_identity_protection.create_policy_rule.assert_not_called()
+        mock_identity_protection.delete_policy_rules.assert_not_called()
+        self.assertEqual(response.body['new'], 0)
+        self.assertEqual(response.body['deleted'], 0)
+
     def test_get_table_data_transform_rules_with_config(self):
         """Test get_table_data_transform_rules with config parameter"""
         request = Request()

@@ -215,6 +215,11 @@ def _transform_rules(logger, request, result_data, response_body):
         copy_from_cmdb_response_to_idp_create_request(idp_create_rule_request.source_user.entity_id,
                                                       idp_create_rule_request.source_endpoint.entity_id,
                                                       access)
+
+        # Check if rule is empty after applying retirements
+        is_empty_rule = (not idp_create_rule_request.source_user.entity_id.include and
+                         not idp_create_rule_request.source_endpoint.entity_id.exclude)
+
         rule_conditions = None
         # Get policy rule details
         rule_conditions, errs = get_idp_policy_rule_details(identity_protection, idp_policy_rule_id, logger,
@@ -231,12 +236,37 @@ def _transform_rules(logger, request, result_data, response_body):
             response_body.pop('idpPolicyRuleId')
 
         if rule_conditions is not None:
+            if is_empty_rule:
+                # Rule exists but would be empty after retirements — delete it
+                deleted_rules = identity_protection.delete_policy_rules(parameters={'ids': idp_policy_rule_id})
+                if deleted_rules['status_code'] != 200:
+                    errs = deleted_rules['body']['errors'] if deleted_rules and 'body' in deleted_rules and 'errors' in deleted_rules['body'] else None
+                    logger.error("Error deleting empty IDP policy rule: %s", errs)
+                    response_body['errors']['errs'] = errs
+                    response_body['errors']['description'] = ("Error deleting empty IDP policy rule for ID - " + idp_policy_rule_id
+                                                              + " and policy rule name - " + idp_policy_rule_name)
+                    status_code = 502
+                    break
+                logger.info("Deleted empty policy rule after retirements - " + idp_policy_rule_name)
+                response_body['deleted'] += 1
+                if idp_policy_rule_name not in response_body['deletedPolicyRules']:
+                    response_body['deletedPolicyRules'].append(idp_policy_rule_name)
+                if is_timestamp_latest(latest_sys_updated_on, access['latestSysUpdatedOn']):
+                    latest_sys_updated_on = access['latestSysUpdatedOn']
+                continue
+
             if update_idp_rule(rule_conditions, idp_create_rule_request, identity_protection, idp_policy_rule_id,
                                idp_policy_rule_name, response_body, logger) != 200:
                 status_code = 502
                 break
             operation_type = 'UPDATED'
         else:
+            if is_empty_rule:
+                # New rule would be empty — skip creation entirely
+                logger.info("Skipping creation of empty rule - " + idp_policy_rule_name)
+                if is_timestamp_latest(latest_sys_updated_on, access['latestSysUpdatedOn']):
+                    latest_sys_updated_on = access['latestSysUpdatedOn']
+                continue
             # create new rule
             logger.info("Create new rule")
             operation_type = 'NEW'
