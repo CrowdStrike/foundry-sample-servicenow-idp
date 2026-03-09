@@ -1,7 +1,7 @@
 """
 This test validates function
 """
-# pylint: disable=too-many-public-methods
+# pylint: disable=too-many-public-methods,too-many-lines
 import importlib
 import json
 import logging
@@ -1171,7 +1171,7 @@ class FnTestCase(unittest.TestCase):
         }]
         response_body = main.initialize_response_body()
 
-        response = main._transform_rules(self.logger, request, result_data, response_body)
+        response = main._transform_rules(self.logger, request, result_data, response_body)  # pylint: disable=protected-access
 
         self.assertEqual(response.code, 200)
         self.assertEqual(response.body['deleted'], 1)
@@ -1222,7 +1222,7 @@ class FnTestCase(unittest.TestCase):
         }]
         response_body = main.initialize_response_body()
 
-        response = main._transform_rules(self.logger, request, result_data, response_body)
+        response = main._transform_rules(self.logger, request, result_data, response_body)  # pylint: disable=protected-access
 
         self.assertEqual(response.code, 200)
         # No rule created, no rule deleted (nothing existed)
@@ -1298,7 +1298,7 @@ class FnTestCase(unittest.TestCase):
         }]
         response_body = main.initialize_response_body()
 
-        response = main._transform_rules(self.logger, request, result_data, response_body)
+        response = main._transform_rules(self.logger, request, result_data, response_body)  # pylint: disable=protected-access
 
         self.assertEqual(response.code, 200)
         # Rule should be UPDATED (delete + create), not just deleted
