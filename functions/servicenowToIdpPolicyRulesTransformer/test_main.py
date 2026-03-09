@@ -226,7 +226,9 @@ class FnTestCase(unittest.TestCase):
             'apiDefinitionId': 'test_def',
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
-            'latestSysUpdatedOn': '2025-05-12 18:53:31'
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'userRetiredColumn': 'u_svc_retired',
+            'appRetiredColumn': 'u_server_retired'
         }
 
         # Mock successful ServiceNow API response with no pagination
@@ -271,6 +273,8 @@ class FnTestCase(unittest.TestCase):
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
             'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'userRetiredColumn': 'u_svc_retired',
+            'appRetiredColumn': 'u_server_retired',
             'serviceNowNextPageURL': 'https://example.com/api?sysparm_offset=10'
         }
 
@@ -313,6 +317,8 @@ class FnTestCase(unittest.TestCase):
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
             'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'userRetiredColumn': 'u_svc_retired',
+            'appRetiredColumn': 'u_server_retired',
             'serviceNowNextPageURL': 'https://example.com/api?sysparm_offset=30'  # This matches the last URL
         }
 
@@ -348,7 +354,9 @@ class FnTestCase(unittest.TestCase):
             'apiDefinitionId': 'test_def',
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
-            'latestSysUpdatedOn': '2025-05-12 18:53:31'
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'userRetiredColumn': 'u_svc_retired',
+            'appRetiredColumn': 'u_server_retired'
         }
 
         # Mock ServiceNow API error response
@@ -374,7 +382,9 @@ class FnTestCase(unittest.TestCase):
             'apiDefinitionId': 'test_def',
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
-            'latestSysUpdatedOn': '2025-05-12 18:53:31'
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'userRetiredColumn': 'u_svc_retired',
+            'appRetiredColumn': 'u_server_retired'
         }
 
         # Mock an exception during API call
@@ -395,7 +405,9 @@ class FnTestCase(unittest.TestCase):
             'apiDefinitionId': 'test_def',
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
-            'latestSysUpdatedOn': '2025-05-12 18:53:31'
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'userRetiredColumn': 'u_svc_retired',
+            'appRetiredColumn': 'u_server_retired'
         }
 
         # Mock successful ServiceNow API response with empty results
@@ -1220,7 +1232,9 @@ class FnTestCase(unittest.TestCase):
             'apiDefinitionId': 'test_def',
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
-            'latestSysUpdatedOn': '2025-05-12 18:53:31'
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'userRetiredColumn': 'u_svc_retired',
+            'appRetiredColumn': 'u_server_retired'
         }
 
         # Test with non-empty config
