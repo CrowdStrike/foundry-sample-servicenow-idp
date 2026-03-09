@@ -577,6 +577,48 @@ class FnTestCase(unittest.TestCase):
         self.assertEqual(set(source_user_entity_id.include), {'user1', 'user2'})
         self.assertEqual(set(source_endpoint_entity_id.exclude), {'host1', 'host2'})
 
+    def test_copy_from_cmdb_response_removes_retired_users(self):
+        """Test that retired user GUIDs are removed from sourceUser.entityId.include."""
+        source_user_entity_id = main.FilterCriteria(include=['existing_user'])
+        source_endpoint_entity_id = main.FilterCriteria(exclude=['existing_host'])
+
+        entities = {
+            'user_guid': {'active_user'},
+            'host_guid': {'active_host'},
+            'retired_user_guid': {'existing_user'},
+            'retired_host_guid': set()
+        }
+
+        main.copy_from_cmdb_response_to_idp_create_request(
+            source_user_entity_id, source_endpoint_entity_id, entities
+        )
+
+        self.assertIn('active_user', source_user_entity_id.include)
+        self.assertNotIn('existing_user', source_user_entity_id.include)
+        self.assertIn('existing_host', source_endpoint_entity_id.exclude)
+        self.assertIn('active_host', source_endpoint_entity_id.exclude)
+
+    def test_copy_from_cmdb_response_removes_retired_hosts(self):
+        """Test that retired host GUIDs are removed from sourceEndpoint.entityId.exclude."""
+        source_user_entity_id = main.FilterCriteria(include=['existing_user'])
+        source_endpoint_entity_id = main.FilterCriteria(exclude=['existing_host'])
+
+        entities = {
+            'user_guid': {'active_user'},
+            'host_guid': {'active_host'},
+            'retired_user_guid': set(),
+            'retired_host_guid': {'existing_host'}
+        }
+
+        main.copy_from_cmdb_response_to_idp_create_request(
+            source_user_entity_id, source_endpoint_entity_id, entities
+        )
+
+        self.assertIn('existing_user', source_user_entity_id.include)
+        self.assertIn('active_user', source_user_entity_id.include)
+        self.assertIn('active_host', source_endpoint_entity_id.exclude)
+        self.assertNotIn('existing_host', source_endpoint_entity_id.exclude)
+
     def test_add_to_idp_request_from_rule_condition_included(self):
         """Test add_to_idp_request_from_rule_condition with INCLUDED option"""
         idp_request_entity = main.FilterCriteria()
