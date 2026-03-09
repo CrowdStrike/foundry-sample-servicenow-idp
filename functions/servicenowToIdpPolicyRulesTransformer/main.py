@@ -592,6 +592,8 @@ class TransformRequest:
     idp_trigger_column: Optional[str]
     idp_rule_name_prefix: Optional[str]
     idp_simulation_mode_column: Optional[bool]
+    user_retired_column: str = ""
+    app_retired_column: str = ""
 
     @classmethod
     def from_request(cls, request_body: Dict[str, Any]) -> 'TransformRequest':
@@ -610,7 +612,9 @@ class TransformRequest:
             idp_action_column=request_body.get('idpActionColumn'),
             idp_trigger_column=request_body.get('idpTriggerColumn'),
             idp_rule_name_prefix=request_body.get('idpRuleNamePrefix'),
-            idp_simulation_mode_column=request_body.get('idpSimulationModeColumn')
+            idp_simulation_mode_column=request_body.get('idpSimulationModeColumn'),
+            user_retired_column=request_body.get('userRetiredColumn', ''),
+            app_retired_column=request_body.get('appRetiredColumn', ''),
         )
 
 
