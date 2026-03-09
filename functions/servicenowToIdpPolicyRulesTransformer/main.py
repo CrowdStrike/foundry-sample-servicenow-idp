@@ -567,6 +567,19 @@ def copy_from_cmdb_response_to_idp_create_request(source_user_entity_id, source_
     source_user_entity_id.include = merge_lists_unique_ordered(source_user_entity_id.include,
                                                                list(entities['user_guid']))
 
+    # Remove retired GUIDs
+    retired_users = entities.get('retired_user_guid', set())
+    retired_hosts = entities.get('retired_host_guid', set())
+
+    if retired_users:
+        source_user_entity_id.include = [
+            uid for uid in source_user_entity_id.include if uid not in retired_users
+        ]
+    if retired_hosts:
+        source_endpoint_entity_id.exclude = [
+            hid for hid in source_endpoint_entity_id.exclude if hid not in retired_hosts
+        ]
+
 
 def add_to_idp_request_from_rule_condition(idp_request_entity, rule_entity):
     """
