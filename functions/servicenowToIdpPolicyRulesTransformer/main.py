@@ -466,6 +466,8 @@ def merge_apps_access(logger, transform_request, response_body) -> dict:
                 reduced[key] = {
                     "user_guid": set(),
                     "host_guid": set(),
+                    "retired_user_guid": set(),
+                    "retired_host_guid": set(),
                     "latestSysUpdatedOn": "",
                     "enabled": None,
                     "simulation_mode": None,
@@ -473,8 +475,26 @@ def merge_apps_access(logger, transform_request, response_body) -> dict:
                     "trigger": ""
                 }
 
-            reduced[key]['user_guid'].add(r[transform_request.user_guid_column])
-            reduced[key]['host_guid'].add(r[transform_request.host_guid_column])
+            user_guid_val = r[transform_request.user_guid_column]
+            host_guid_val = r[transform_request.host_guid_column]
+
+            user_retired = r.get(transform_request.user_retired_column, 'false').lower() == 'true'
+            app_retired = r.get(transform_request.app_retired_column, 'false').lower() == 'true'
+
+            if user_retired:
+                reduced[key]['retired_user_guid'].add(user_guid_val)
+                reduced[key]['user_guid'].discard(user_guid_val)
+            else:
+                reduced[key]['user_guid'].add(user_guid_val)
+                reduced[key]['retired_user_guid'].discard(user_guid_val)
+
+            if app_retired:
+                reduced[key]['retired_host_guid'].add(host_guid_val)
+                reduced[key]['host_guid'].discard(host_guid_val)
+            else:
+                reduced[key]['host_guid'].add(host_guid_val)
+                reduced[key]['retired_host_guid'].discard(host_guid_val)
+
             reduced[key]['enabled'] = json.loads(r[transform_request.idp_enabled_column])
             reduced[key]['simulation_mode'] = json.loads(r[transform_request.idp_simulation_mode_column])
             reduced[key]['action'] = r[transform_request.idp_action_column]
