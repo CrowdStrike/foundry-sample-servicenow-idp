@@ -258,11 +258,11 @@ def _transform_rules(logger, request, result_data, response_body):  # pylint: di
                                   access)
 
         # Check if rule is empty after applying retirements
-        is_empty_rule = (not idp_create_rule_request.source_user.entity_id.include and
-                         not idp_create_rule_request.source_endpoint.entity_id.exclude)
+        deletion_reason = get_deletion_reason(idp_create_rule_request.source_user.entity_id,
+                                              idp_create_rule_request.source_endpoint.entity_id)
 
         if rule_conditions is not None:
-            if is_empty_rule:
+            if deletion_reason:
                 # Rule exists but would be empty after retirements — delete it
                 deleted_rules = identity_protection.delete_policy_rules(parameters={'ids': idp_policy_rule_id})
                 if deleted_rules['status_code'] != 200:
@@ -278,7 +278,7 @@ def _transform_rules(logger, request, result_data, response_body):  # pylint: di
                         + idp_policy_rule_name)
                     status_code = 502
                     break
-                logger.info("Deleted empty policy rule after retirements - " + idp_policy_rule_name)
+                logger.info("Deleted policy rule (%s) - %s", deletion_reason, idp_policy_rule_name)
                 response_body['deleted'] += 1
                 if idp_policy_rule_name not in response_body['deletedPolicyRules']:
                     response_body['deletedPolicyRules'].append(idp_policy_rule_name)
@@ -292,9 +292,9 @@ def _transform_rules(logger, request, result_data, response_body):  # pylint: di
                 break
             operation_type = 'UPDATED'
         else:
-            if is_empty_rule:
+            if deletion_reason:
                 # New rule would be empty — skip creation entirely
-                logger.info("Skipping creation of empty rule - " + idp_policy_rule_name)
+                logger.info("Skipping creation of rule (%s) - %s", deletion_reason, idp_policy_rule_name)
                 if is_timestamp_latest(latest_sys_updated_on, access['latestSysUpdatedOn']):
                     latest_sys_updated_on = access['latestSysUpdatedOn']
                 continue
