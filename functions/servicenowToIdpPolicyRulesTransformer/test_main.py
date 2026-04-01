@@ -1372,6 +1372,34 @@ class FnTestCase(unittest.TestCase):
         self.assertNotIn('user2', app['user_guid'])
         self.assertNotIn('host2', app['host_guid'])
 
+    def test_get_deletion_reason_both_empty(self):
+        """Both users and hosts empty → reason includes both."""
+        user_entity_id = main.FilterCriteria(include=[], exclude=[])
+        endpoint_entity_id = main.FilterCriteria(include=[], exclude=[])
+        result = main.get_deletion_reason(user_entity_id, endpoint_entity_id)
+        self.assertEqual(result, "all users and hosts retired")
+
+    def test_get_deletion_reason_users_empty_only(self):
+        """Users empty, hosts remain → reason mentions users."""
+        user_entity_id = main.FilterCriteria(include=[], exclude=[])
+        endpoint_entity_id = main.FilterCriteria(include=[], exclude=['host1'])
+        result = main.get_deletion_reason(user_entity_id, endpoint_entity_id)
+        self.assertEqual(result, "all users retired")
+
+    def test_get_deletion_reason_hosts_empty_only(self):
+        """Hosts empty, users remain → reason mentions hosts."""
+        user_entity_id = main.FilterCriteria(include=['user1'], exclude=[])
+        endpoint_entity_id = main.FilterCriteria(include=[], exclude=[])
+        result = main.get_deletion_reason(user_entity_id, endpoint_entity_id)
+        self.assertEqual(result, "all hosts retired")
+
+    def test_get_deletion_reason_neither_empty(self):
+        """Both populated → None (no deletion)."""
+        user_entity_id = main.FilterCriteria(include=['user1'], exclude=[])
+        endpoint_entity_id = main.FilterCriteria(include=[], exclude=['host1'])
+        result = main.get_deletion_reason(user_entity_id, endpoint_entity_id)
+        self.assertIsNone(result)
+
     def test_get_table_data_transform_rules_with_config(self):
         """Test get_table_data_transform_rules with config parameter"""
         request = Request()

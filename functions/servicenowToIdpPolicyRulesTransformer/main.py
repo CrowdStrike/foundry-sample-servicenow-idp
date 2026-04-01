@@ -183,6 +183,23 @@ def get_servicenow_data(logger, definition_id, operation_id, table_name, query, 
     return response
 
 
+def get_deletion_reason(source_user_entity_id, source_endpoint_entity_id):
+    """Return a deletion reason string if the rule should be deleted, or None.
+
+    A rule should be deleted when either all users or all hosts have been retired,
+    since a rule with only one side populated creates broken policies.
+    """
+    users_empty = not source_user_entity_id.include
+    hosts_empty = not source_endpoint_entity_id.exclude
+    if users_empty and hosts_empty:
+        return "all users and hosts retired"
+    if users_empty:
+        return "all users retired"
+    if hosts_empty:
+        return "all hosts retired"
+    return None
+
+
 def _transform_rules(logger, request, result_data, response_body):  # pylint: disable=too-many-branches,too-many-statements
     transform_request = TransformRequest.from_request(request.body)
     transform_request.result = result_data
