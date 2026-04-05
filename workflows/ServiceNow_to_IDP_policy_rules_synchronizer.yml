@@ -1,11 +1,11 @@
-name: ServiceNow data to IDP policy rules synchronizer-FF
+name: ServiceNow data to IDP policy rules synchronizer
 description: ServiceNow table data to IDP policy rules synchronizer
 parameters:
     actions:
         configuration:
             GetTableDataTransformRules:
                 properties:
-                    appRetired:
+                    hostRetired:
                         required: true
                     cmdbAppNameColumn:
                         required: true
