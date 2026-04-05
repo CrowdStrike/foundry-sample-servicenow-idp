@@ -49,7 +49,19 @@
       "description": "ServiceNow total record count to process"
     },
     "errors": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "errs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "description": {
+          "type": "string"
+        }
+      }
     }
   },
   "type": "object",

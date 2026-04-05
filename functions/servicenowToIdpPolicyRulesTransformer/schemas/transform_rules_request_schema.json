@@ -73,7 +73,7 @@
       "type": "string",
       "description": "Column indicating user/service retirement status in ServiceNow CMDB"
     },
-    "appRetired": {
+    "hostRetired": {
       "type": "string",
       "description": "Column indicating server/host retirement status in ServiceNow CMDB"
     }
