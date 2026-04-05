@@ -1,10 +1,12 @@
-name: ServiceNow data to IDP policy rules synchronizer
+name: ServiceNow data to IDP policy rules synchronizer-FF
 description: ServiceNow table data to IDP policy rules synchronizer
 parameters:
     actions:
         configuration:
             GetTableDataTransformRules:
                 properties:
+                    appRetired:
+                        required: true
                     cmdbAppNameColumn:
                         required: true
                     hostGuidColumn:
@@ -27,6 +29,12 @@ parameters:
                         required: true
                     userGuidColumn:
                         required: true
+                    userRetired:
+                        required: true
+            SendEmail:
+                properties:
+                    to:
+                        required: true
     trigger:
         node_id: trigger
         fields:
@@ -37,15 +45,23 @@ trigger:
     next:
         - CreateVariable
     event: Schedule
+    name: Scheduled
 actions:
     CreateVariable:
+        id: 702d15788dbbffdf0b68d8e2f3599aa4
+        default_name: Create variable
+        class: CreateVariable
+        name: Create variable
         next:
             - GetObjectFromServicenowIdpAppState
-        id: 702d15788dbbffdf0b68d8e2f3599aa4
-        class: CreateVariable
         properties:
             variable_schema:
                 properties:
+                    allErrors:
+                        items:
+                            properties: {}
+                            type: object
+                        type: array
                     serviceNowNextPageURL:
                         description: ServiceNow next page URL
                         type: string
@@ -58,22 +74,59 @@ actions:
                         description: Synchronization checkpoint storage
                         format: foundryCustomStorageObjectKey
                         type: string
+                    totalDeletedPolicyRuleList:
+                        items:
+                            type: string
+                        type: array
+                    totalIgnoredPolicies:
+                        type: integer
+                    totalNewPolicies:
+                        type: integer
+                    totalNewPolicyRuleList:
+                        items:
+                            type: string
+                        type: array
+                    totalPoliciesDeleted:
+                        type: integer
+                    totalPoliciesUpdated:
+                        type: integer
+                    totalUpdatedPolicyRulesList:
+                        items:
+                            type: string
+                        type: array
                     v_latestSysUpdatedOn:
                         type: string
                 type: object
         version_constraint: ~1
     GetObjectFromServicenowIdpAppState:
+        id: collections.servicenow_idp_app_state.get
+        name: Get object from servicenow_idp_app_state
         next:
             - UpdateVariable
-        id: collections.servicenow_idp_app_state.get
         properties:
             custom_storage_object_key: ${WorkflowCustomVariable.servicenowIdpAppState}
         version_constraint: ~0
+    SendEmail:
+        id: 07413ef9ba7c47bf5a242799f59902cc
+        default_name: Send email
+        name: Send email
+        properties:
+            _fields:
+                - ${GetObjectFromServicenowIdpAppState.CustomStorage.Collection_servicenow_idp_app_state.lastSyncTime}
+                - ${GetObjectFromServicenowIdpAppState.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn}
+                - ${Workflow.Definition.Name}
+                - ${Workflow.Definition.Description}
+                - ${Workflow.Execution.ID}
+            msg: "Hello,\n\nPlease find below the automated execution summary for the IDP Policy Rules.\n\n<hr style=\"border: 1px solid #ccc;\">\n\n<h2>Policy Rules Execution Summary</h2>\n\n<hr style=\"border: 1px solid #ccc;\">\n\n<h3>✨ New Policy Rules</h3>\n\n<p>Total Count: ${data['WorkflowCustomVariable.totalNewPolicies']}</p>\n\n<p>Policy Names: ${cs.json.pretty(data['WorkflowCustomVariable.totalNewPolicyRuleList'])}</p>\n\n<h3>✏️ Updated Policy Rules</h3>\n\n<p>Total Count: ${data['WorkflowCustomVariable.totalPoliciesUpdated']}</p>\n\n<p>Policy Names: ${cs.json.pretty(data['WorkflowCustomVariable.totalUpdatedPolicyRulesList'])}</p>\n\n<h3>\U0001F5D1️ Deleted Policy Rules</h3>\n\n<p>Total Count: ${data['WorkflowCustomVariable.totalPoliciesDeleted']}</p>\n\n<p>Policy Names: ${cs.json.pretty(data['WorkflowCustomVariable.totalDeletedPolicyRuleList'])}</p>\n\n<h3>⏭️ Ignored Policy Rules</h3>\n\n<p>Total Count: ${data['WorkflowCustomVariable.totalIgnoredPolicies']}</p>\n\n<h3>:warning: Errors</h3>\n\n<p>Errors: ${cs.json.pretty(data['WorkflowCustomVariable.allErrors'])}</p>\n\n<hr style=\"border: 1px solid #ccc;\">\n\n<p>This is an automated message generated by CrowdStrike Fusion Workflow.<br>\nPlease do not reply to this email.</p>"
+            msg_type: html
+            subject: ServiceNow CMDB Workflow (${data['Workflow.Definition.Name']}) Execution Summary
+        version_constraint: ~1
     UpdateVariable:
-        next:
-            - Loop
         id: 6c6eab39063fa3b72d98c82af60deb8a
         class: UpdateVariable
+        name: Update variable
+        next:
+            - Loop
         properties:
             WorkflowCustomVariable:
                 v_latestSysUpdatedOn: '${data[''GetObjectFromServicenowIdpAppState.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn'']== null || data[''GetObjectFromServicenowIdpAppState.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn'']== "" ? "1970-01-01 00:00:00" : data[''GetObjectFromServicenowIdpAppState.CustomStorage.Collection_servicenow_idp_app_state.latestSysUpdatedOn'']}'
@@ -81,6 +134,9 @@ actions:
 loops:
     Loop:
         display: While serviceNowRecordsProcessStatus is equal to pending
+        name: While serviceNowRecordsProcessStatus is equal to pending
+        next:
+            - SendEmail
         for:
             input: ""
             condition: WorkflowCustomVariable.serviceNowRecordsProcessStatus:'pending'
@@ -93,19 +149,21 @@ loops:
                 - GetTableDataTransformRules
         actions:
             AddObjectToServicenowIdpAppState:
+                id: collections.servicenow_idp_app_state.create
+                name: Add object to servicenow_idp_app_state
                 next:
                     - WriteToLogRepo
-                id: collections.servicenow_idp_app_state.create
                 properties:
                     custom_storage_object_key: servicenow_idp_app_state
                     lastSyncTime: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.lastSyncTime']}
                     latestSysUpdatedOn: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.latestSysUpdatedOn']}
                 version_constraint: ~0
             GetTableDataTransformRules:
+                id: functions.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules
+                name: get_table_data_transform_rules
                 next:
                     - AddObjectToServicenowIdpAppState
-                    - UpdateVariable2
-                id: functions.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules
+                    - UpdateWorkflowVariables
                 properties:
                     apiDefinitionId: service now cmdb
                     apiOperationId: GET__api_now_table_tablename
@@ -114,16 +172,28 @@ loops:
                     serviceNowNextPageURL: ${data['WorkflowCustomVariable.serviceNowNextPageURL']}
                     sysParamQuery: sys_updated_on>=${data['WorkflowCustomVariable.v_latestSysUpdatedOn']}
                 version_constraint: ~0
-            UpdateVariable2:
+            UpdateWorkflowVariables:
                 id: 6c6eab39063fa3b72d98c82af60deb8a
+                default_name: Update variable
                 class: UpdateVariable
+                name: Update workflow variables
                 properties:
                     WorkflowCustomVariable:
+                        allErrors: ${size(data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.errors.errs'])>0?data['WorkflowCustomVariable.allErrors']+[data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.errors']]:data['WorkflowCustomVariable.allErrors']}
                         serviceNowNextPageURL: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.serviceNowNextPageURL']}
                         serviceNowRecordsProcessStatus: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.serviceNowRecordsProcessStatus']}
+                        totalDeletedPolicyRuleList: ${data['WorkflowCustomVariable.totalDeletedPolicyRuleList']+data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.deletedPolicyRules']}
+                        totalIgnoredPolicies: ${int(data['WorkflowCustomVariable.totalIgnoredPolicies'])+int(data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.ignoredSysIdCount'])}
+                        totalNewPolicies: ${int(data['WorkflowCustomVariable.totalNewPolicies'])+int(data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.new'])}
+                        totalNewPolicyRuleList: ${data['WorkflowCustomVariable.totalNewPolicyRuleList']+data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.newPolicyRules']}
+                        totalPoliciesDeleted: ${int(data['WorkflowCustomVariable.totalPoliciesDeleted'])+int(data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.deleted'])}
+                        totalPoliciesUpdated: ${int(data['WorkflowCustomVariable.totalPoliciesUpdated']) + int(data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.updated'])}
+                        totalUpdatedPolicyRulesList: ${data['WorkflowCustomVariable.totalUpdatedPolicyRulesList']+data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.updatedPolicyRules']}
                 version_constraint: ~1
             WriteToLogRepo:
                 id: 0ec68880256f6192b9abef766d31fb04
+                default_name: Write to log repo
+                name: Write to log repo
                 properties:
                     custom_json:
                         checkpoint: ${data['GetTableDataTransformRules.FaaS.servicenowToIdpPolicyRulesTransformer.get_table_data_transform_rules.latestSysUpdatedOn']}

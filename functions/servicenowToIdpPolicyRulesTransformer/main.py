@@ -222,7 +222,7 @@ def _transform_rules(logger, request, result_data, response_body):  # pylint: di
         # check for idp rule ID
         idp_policy_rule_id, errs = get_idp_policy_rule_id(logger, identity_protection, idp_policy_rule_name)
         if errs:
-            logger.error("Error getting IDP policy rule ID: %s", errs)
+            logger.error(f"Error getting IDP policy rule ID: {errs}")
             response_body['errors']['errs'] = errs
             response_body['errors']['description'] = ("Error getting IDP policy rule ID for policy rule: "
                                                       + idp_policy_rule_name)
@@ -238,7 +238,7 @@ def _transform_rules(logger, request, result_data, response_body):  # pylint: di
         rule_conditions, errs = get_idp_policy_rule_details(identity_protection, idp_policy_rule_id, logger,
                                                             response_body, rule_conditions)
         if errs:
-            logger.error("Error getting IDP policy rule details: %s", errs)
+            logger.error(f"Error getting IDP policy rule details: {errs}")
             response_body['errors']['errs'] = errs
             response_body['errors']['description'] = ("Error getting IDP policy rule details for ID - "
                                                       + idp_policy_rule_id + " and policy rule name - "
@@ -269,7 +269,7 @@ def _transform_rules(logger, request, result_data, response_body):  # pylint: di
                     errs = (deleted_rules['body']['errors']
                             if deleted_rules and 'body' in deleted_rules
                             and 'errors' in deleted_rules['body'] else None)
-                    logger.error("Error deleting empty IDP policy rule: %s", errs)
+                    logger.error(f"Error deleting empty IDP policy rule: {errs}")
                     response_body['errors']['errs'] = errs
                     response_body['errors']['description'] = (
                         "Error deleting empty IDP policy rule for ID - "
@@ -278,7 +278,7 @@ def _transform_rules(logger, request, result_data, response_body):  # pylint: di
                         + idp_policy_rule_name)
                     status_code = 502
                     break
-                logger.info("Deleted policy rule (%s) - %s", deletion_reason, idp_policy_rule_name)
+                logger.info(f"Deleted policy rule ({deletion_reason}) - {idp_policy_rule_name}")
                 response_body['deleted'] += 1
                 if idp_policy_rule_name not in response_body['deletedPolicyRules']:
                     response_body['deletedPolicyRules'].append(idp_policy_rule_name)
@@ -294,7 +294,7 @@ def _transform_rules(logger, request, result_data, response_body):  # pylint: di
         else:
             if deletion_reason:
                 # New rule would be empty — skip creation entirely
-                logger.info("Skipping creation of rule (%s) - %s", deletion_reason, idp_policy_rule_name)
+                logger.info(f"Skipping creation of rule ({deletion_reason}) - {idp_policy_rule_name}")
                 if is_timestamp_latest(latest_sys_updated_on, access['latestSysUpdatedOn']):
                     latest_sys_updated_on = access['latestSysUpdatedOn']
                 continue
@@ -415,7 +415,7 @@ def delete_existing_idp_rule(identity_protection, idp_policy_rule_id, idp_policy
             'description'] = ("Error deleting IDP policy rule details for ID - " + idp_policy_rule_id
                               + " and policy rule name - " + idp_policy_rule_name)
         status_code = 502
-    logger.info("deleted policy - " + str(idp_policy_rule_id))
+    logger.info(f"deleted policy - {str(idp_policy_rule_id)}")
     return status_code
 
 
@@ -438,7 +438,7 @@ def create_idp_rule(identity_protection, idp_create_rule_request, response_body,
     if created_rule['status_code'] != 200:
         errs = created_rule['body']['errors'] if created_rule and 'body' in created_rule and 'errors' in \
                                                  created_rule['body'] else None
-        logger.error("Error creating IDP policy rule details: %s", errs)
+        logger.error(f"Error creating IDP policy rule details: {errs}")
         response_body['errors']['errs'] = errs
         response_body['errors'][
             'description'] = "Error creating IDP policy rule details for policy rule name - " + idp_policy_rule_name
@@ -550,7 +550,7 @@ def merge_apps_access(logger, transform_request, response_body) -> dict:
             host_guid_val = r[transform_request.host_guid_column]
 
             user_retired = r.get(transform_request.user_retired_column, 'false').lower() == 'true'
-            app_retired = r.get(transform_request.app_retired_column, 'false').lower() == 'true'
+            app_retired = r.get(transform_request.host_retired_column, 'false').lower() == 'true'
 
             if user_retired:
                 reduced[key]['retired_user_guid'].add(user_guid_val)
@@ -588,14 +588,14 @@ def get_idp_policy_rule_id(logger, identity_protection, rule_name):
     if policy_ids is not None and policy_ids['status_code'] == 200 and policy_ids['body'] is not None and 'resources' in \
             policy_ids['body'] and len(policy_ids['body']['resources']) > 0:
         if len(policy_ids['body']['resources']) > 1:
-            logger.info("Multiple policies found - " + str(len(policy_ids['body']['resources'])) + ". Choosing " +
-                        policy_ids['body']['resources'][0])
+            logger.info(f"Multiple policies found - {str(len(policy_ids['body']['resources']))}. "
+                        f"Choosing {policy_ids['body']['resources'][0]}")
         idp_policy_rule_id = policy_ids['body']['resources'][0:1]
     else:
         if policy_ids and policy_ids['status_code'] != 200 and policy_ids['status_code'] != 404:
             errs = policy_ids['body']['errors'] if policy_ids and 'body' in policy_ids and 'errors' in policy_ids[
                 'body'] else None
-        logger.info("No policyId found for " + rule_name)
+        logger.info(f"No policyId found for {rule_name}")
     return idp_policy_rule_id, errs
 
 
@@ -612,7 +612,7 @@ def get_idp_policy_rule_details(identity_protection, idp_policy_rule_id, logger,
                     + idp_policy_rule_id[0])
 
             idp_policy_rule_id = idp_policy_rule_id[0]
-            logger.info("get_policy_rules for - " + idp_policy_rule_id)
+            logger.info(f"get_policy_rules for - {idp_policy_rule_id}")
             response_body['idpPolicyRuleId'] = idp_policy_rule_id
             # get IDP policy rule details
             policy_rules = identity_protection.get_policy_rules(parameters={'ids': idp_policy_rule_id})
@@ -701,7 +701,7 @@ class TransformRequest:  # pylint: disable=too-many-instance-attributes
     idp_rule_name_prefix: Optional[str]
     idp_simulation_mode_column: Optional[bool]
     user_retired_column: str = ""
-    app_retired_column: str = ""
+    host_retired_column: str = ""
 
     @classmethod
     def from_request(cls, request_body: Dict[str, Any]) -> 'TransformRequest':
@@ -722,7 +722,7 @@ class TransformRequest:  # pylint: disable=too-many-instance-attributes
             idp_rule_name_prefix=request_body.get('idpRuleNamePrefix'),
             idp_simulation_mode_column=request_body.get('idpSimulationModeColumn'),
             user_retired_column=request_body.get('userRetired', ''),
-            app_retired_column=request_body.get('appRetired', ''),
+            host_retired_column=request_body.get('hostRetired', ''),
         )
 
 
