@@ -80,5 +80,5 @@
   },
   "type": "object",
   "description": "This generated schema may need tweaking. In particular format fields are attempts at matching workflow field types but may not be correct.",
-  "required": ["cmdbAppNameColumn", "userGuidColumn", "hostGuidColumn", "sysUpdatedOnColumn", "idpEnabledColumn", "idpSimulationModeColumn", "idpActionColumn", "idpTriggerColumn", "idpRuleNamePrefix", "apiDefinitionId", "apiOperationId", "tableName", "userRetired", "appRetired"]
+  "required": ["cmdbAppNameColumn", "userGuidColumn", "hostGuidColumn", "sysUpdatedOnColumn", "idpEnabledColumn", "idpSimulationModeColumn", "idpActionColumn", "idpTriggerColumn", "idpRuleNamePrefix", "apiDefinitionId", "apiOperationId", "tableName"]
 }
