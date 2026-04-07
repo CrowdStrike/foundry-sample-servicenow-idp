@@ -9,7 +9,7 @@ parameters:
                         required: true
                     hostGuidColumn:
                         required: true
-                    hostRetired:
+                    hostRetiredColumn:
                         required: false
                     idpActionColumn:
                         required: true
@@ -29,7 +29,7 @@ parameters:
                         required: true
                     userGuidColumn:
                         required: true
-                    userRetired:
+                    userRetiredColumn:
                         required: false
             SendEmail:
                 properties:
