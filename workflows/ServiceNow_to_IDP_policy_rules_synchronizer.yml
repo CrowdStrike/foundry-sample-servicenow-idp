@@ -1,16 +1,16 @@
-name: ServiceNow data to IDP policy rules synchronizer
+name: ServiceNow data to IDP-Apr7
 description: ServiceNow table data to IDP policy rules synchronizer
 parameters:
     actions:
         configuration:
             GetTableDataTransformRules:
                 properties:
-                    hostRetired:
-                        required: true
                     cmdbAppNameColumn:
                         required: true
                     hostGuidColumn:
                         required: true
+                    hostRetired:
+                        required: false
                     idpActionColumn:
                         required: true
                     idpEnabledColumn:
@@ -30,7 +30,7 @@ parameters:
                     userGuidColumn:
                         required: true
                     userRetired:
-                        required: true
+                        required: false
             SendEmail:
                 properties:
                     to:
