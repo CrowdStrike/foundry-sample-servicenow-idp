@@ -69,13 +69,13 @@
       "type": "string",
       "description": "ServiceNow next page URL"
     },
-    "userRetired": {
+    "userRetiredColumn": {
       "type": "string",
-      "description": "Column indicating user/service retirement status in ServiceNow CMDB"
+      "description": "Column indicating user/service retirement/delete status in ServiceNow CMDB"
     },
-    "hostRetired": {
+    "hostRetiredColumn": {
       "type": "string",
-      "description": "Column indicating host/server retirement status in ServiceNow CMDB"
+      "description": "Column indicating host/server retirement/delete status in ServiceNow CMDB"
     }
   },
   "type": "object",

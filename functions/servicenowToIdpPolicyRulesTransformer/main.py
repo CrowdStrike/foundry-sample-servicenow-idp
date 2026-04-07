@@ -721,8 +721,8 @@ class TransformRequest:  # pylint: disable=too-many-instance-attributes
             idp_trigger_column=request_body.get('idpTriggerColumn'),
             idp_rule_name_prefix=request_body.get('idpRuleNamePrefix'),
             idp_simulation_mode_column=request_body.get('idpSimulationModeColumn'),
-            user_retired_column=request_body.get('userRetired', ''),
-            host_retired_column=request_body.get('hostRetired', ''),
+            user_retired_column=request_body.get('userRetiredColumn', ''),
+            host_retired_column=request_body.get('hostRetiredColumn', ''),
         )
 
 
