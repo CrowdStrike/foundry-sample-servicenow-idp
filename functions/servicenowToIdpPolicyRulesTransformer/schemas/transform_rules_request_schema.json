@@ -75,7 +75,7 @@
     },
     "hostRetired": {
       "type": "string",
-      "description": "Column indicating server/host retirement status in ServiceNow CMDB"
+      "description": "Column indicating host/server retirement status in ServiceNow CMDB"
     }
   },
   "type": "object",
