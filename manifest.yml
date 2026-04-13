@@ -83,3 +83,6 @@ docs:
     links:
         - servicenowRecords2.png
         - wfSettings.png
+        - idpPolicyRules.png
+        - ngsiemSearch.png
+        - servicenowSettings2.png

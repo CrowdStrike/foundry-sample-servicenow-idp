@@ -1,7 +1,7 @@
 """
 This test validates function
 """
-# pylint: disable=too-many-public-methods
+# pylint: disable=too-many-public-methods,too-many-lines
 import importlib
 import json
 import logging
@@ -82,6 +82,28 @@ class FnTestCase(unittest.TestCase):
         # Assert result is correctly extracted
         self.assertEqual(transform_request.result['id'], '12345')
         self.assertEqual(transform_request.result['name'], 'Test Result')
+
+    def test_from_request_with_retirement_columns(self):
+        """Test TransformRequest.from_request parses retirement column fields."""
+        request_body = {
+            'latestSysUpdatedOn': '2025-05-15T10:30:00Z',
+            'cmdbAppNameColumn': 'app_name',
+            'userGuidColumn': 'user_id',
+            'hostGuidColumn': 'host_id',
+            'sysUpdatedOnColumn': 'updated_at',
+            'idpEnabledColumn': 'idp_enabled',
+            'idpActionColumn': 'idp_action',
+            'idpTriggerColumn': 'idp_trigger',
+            'idpRuleNamePrefix': 'SNOW_',
+            'idpSimulationModeColumn': 'idp_simulation_mode',
+            'userRetiredColumn': 'u_svc_retired',
+            'hostRetiredColumn': 'u_server_retired',
+            'result': {'result': {}}
+        }
+        transform_request = main.TransformRequest.from_request(request_body)
+
+        self.assertEqual(transform_request.user_retired_column, 'u_svc_retired')
+        self.assertEqual(transform_request.host_retired_column, 'u_server_retired')
 
     def test_idp_create_rule(self):
         """test idp create rule data class"""
@@ -204,7 +226,9 @@ class FnTestCase(unittest.TestCase):
             'apiDefinitionId': 'test_def',
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
-            'latestSysUpdatedOn': '2025-05-12 18:53:31'
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'userRetiredColumn': 'u_svc_retired',
+            'hostRetiredColumn': 'u_server_retired'
         }
 
         # Mock successful ServiceNow API response with no pagination
@@ -249,6 +273,8 @@ class FnTestCase(unittest.TestCase):
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
             'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'userRetiredColumn': 'u_svc_retired',
+            'hostRetiredColumn': 'u_server_retired',
             'serviceNowNextPageURL': 'https://example.com/api?sysparm_offset=10'
         }
 
@@ -291,6 +317,8 @@ class FnTestCase(unittest.TestCase):
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
             'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'userRetiredColumn': 'u_svc_retired',
+            'hostRetiredColumn': 'u_server_retired',
             'serviceNowNextPageURL': 'https://example.com/api?sysparm_offset=30'  # This matches the last URL
         }
 
@@ -326,7 +354,9 @@ class FnTestCase(unittest.TestCase):
             'apiDefinitionId': 'test_def',
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
-            'latestSysUpdatedOn': '2025-05-12 18:53:31'
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'userRetiredColumn': 'u_svc_retired',
+            'hostRetiredColumn': 'u_server_retired'
         }
 
         # Mock ServiceNow API error response
@@ -352,7 +382,9 @@ class FnTestCase(unittest.TestCase):
             'apiDefinitionId': 'test_def',
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
-            'latestSysUpdatedOn': '2025-05-12 18:53:31'
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'userRetiredColumn': 'u_svc_retired',
+            'hostRetiredColumn': 'u_server_retired'
         }
 
         # Mock an exception during API call
@@ -373,7 +405,9 @@ class FnTestCase(unittest.TestCase):
             'apiDefinitionId': 'test_def',
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
-            'latestSysUpdatedOn': '2025-05-12 18:53:31'
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'userRetiredColumn': 'u_svc_retired',
+            'hostRetiredColumn': 'u_server_retired'
         }
 
         # Mock successful ServiceNow API response with empty results
@@ -555,6 +589,54 @@ class FnTestCase(unittest.TestCase):
         self.assertEqual(set(source_user_entity_id.include), {'user1', 'user2'})
         self.assertEqual(set(source_endpoint_entity_id.exclude), {'host1', 'host2'})
 
+    def test_apply_retirement_removals_removes_retired_users(self):
+        """Test that retired user GUIDs are removed from sourceUser.entityId.include."""
+        source_user_entity_id = main.FilterCriteria(include=['existing_user'])
+        source_endpoint_entity_id = main.FilterCriteria(exclude=['existing_host'])
+
+        entities = {
+            'user_guid': {'active_user'},
+            'host_guid': {'active_host'},
+            'retired_user_guid': {'existing_user'},
+            'retired_host_guid': set()
+        }
+
+        main.copy_from_cmdb_response_to_idp_create_request(
+            source_user_entity_id, source_endpoint_entity_id, entities
+        )
+        main.apply_retirement_removals(
+            source_user_entity_id, source_endpoint_entity_id, entities
+        )
+
+        self.assertIn('active_user', source_user_entity_id.include)
+        self.assertNotIn('existing_user', source_user_entity_id.include)
+        self.assertIn('existing_host', source_endpoint_entity_id.exclude)
+        self.assertIn('active_host', source_endpoint_entity_id.exclude)
+
+    def test_apply_retirement_removals_removes_retired_hosts(self):
+        """Test that retired host GUIDs are removed from sourceEndpoint.entityId.exclude."""
+        source_user_entity_id = main.FilterCriteria(include=['existing_user'])
+        source_endpoint_entity_id = main.FilterCriteria(exclude=['existing_host'])
+
+        entities = {
+            'user_guid': {'active_user'},
+            'host_guid': {'active_host'},
+            'retired_user_guid': set(),
+            'retired_host_guid': {'existing_host'}
+        }
+
+        main.copy_from_cmdb_response_to_idp_create_request(
+            source_user_entity_id, source_endpoint_entity_id, entities
+        )
+        main.apply_retirement_removals(
+            source_user_entity_id, source_endpoint_entity_id, entities
+        )
+
+        self.assertIn('existing_user', source_user_entity_id.include)
+        self.assertIn('active_user', source_user_entity_id.include)
+        self.assertIn('active_host', source_endpoint_entity_id.exclude)
+        self.assertNotIn('existing_host', source_endpoint_entity_id.exclude)
+
     def test_add_to_idp_request_from_rule_condition_included(self):
         """Test add_to_idp_request_from_rule_condition with INCLUDED option"""
         idp_request_entity = main.FilterCriteria()
@@ -638,7 +720,9 @@ class FnTestCase(unittest.TestCase):
             idp_action_column='u_idp_rule_action',
             idp_trigger_column='u_idp_rule_trigger',
             idp_rule_name_prefix='ServiceNow_',
-            idp_simulation_mode_column='u_idp_rule_simulation_mode'
+            idp_simulation_mode_column='u_idp_rule_simulation_mode',
+            user_retired_column='u_svc_retired',
+            host_retired_column='u_server_retired'
         )
         response_body = main.initialize_response_body()
 
@@ -665,7 +749,9 @@ class FnTestCase(unittest.TestCase):
             idp_action_column='u_idp_rule_action',
             idp_trigger_column='u_idp_rule_trigger',
             idp_rule_name_prefix='ServiceNow_',
-            idp_simulation_mode_column='u_idp_rule_simulation_mode'
+            idp_simulation_mode_column='u_idp_rule_simulation_mode',
+            user_retired_column='u_svc_retired',
+            host_retired_column='u_server_retired'
         )
         response_body = main.initialize_response_body()
 
@@ -850,7 +936,9 @@ class FnTestCase(unittest.TestCase):
             idp_action_column='u_idp_rule_action',
             idp_trigger_column='u_idp_rule_trigger',
             idp_rule_name_prefix='ServiceNow_',
-            idp_simulation_mode_column='u_idp_rule_simulation_mode'
+            idp_simulation_mode_column='u_idp_rule_simulation_mode',
+            user_retired_column='u_svc_retired',
+            host_retired_column='u_server_retired'
         )
         response_body = main.initialize_response_body()
 
@@ -860,6 +948,172 @@ class FnTestCase(unittest.TestCase):
         self.assertEqual(result, {})
         # Should increment ignoredSysIdCount
         self.assertEqual(response_body['ignoredSysIdCount'], 1)
+
+    def test_merge_apps_access_empty_retirement_columns(self):
+        """Test that all records are treated as active when retirement columns are empty."""
+        transform_request = main.TransformRequest(
+            result=[{
+                'u_cmdb_app_name': 'App1',
+                'u_user_guid': 'user1',
+                'u_host_guid': 'host1',
+                'sys_updated_on': '2025-05-13 20:09:59',
+                'u_idp_rule_enabled': 'true',
+                'u_idp_rule_simulation_mode': 'false',
+                'u_idp_rule_action': 'BLOCK',
+                'u_idp_rule_trigger': 'access',
+                'u_svc_retired': 'true',
+                'u_server_retired': 'true'
+            }],
+            latest_sys_updated_on='2025-05-12 18:53:31',
+            cmdb_app_name_column='u_cmdb_app_name',
+            user_guid_column='u_user_guid',
+            host_guid_column='u_host_guid',
+            sys_updated_on_column='sys_updated_on',
+            idp_enabled_column='u_idp_rule_enabled',
+            idp_action_column='u_idp_rule_action',
+            idp_trigger_column='u_idp_rule_trigger',
+            idp_rule_name_prefix='ServiceNow_',
+            idp_simulation_mode_column='u_idp_rule_simulation_mode',
+            user_retired_column='',
+            host_retired_column=''
+        )
+        response_body = main.initialize_response_body()
+
+        result = main.merge_apps_access(self.logger, transform_request, response_body)
+
+        self.assertIn('ServiceNow_App1', result)
+        # Both GUIDs should be active despite retirement flags in the record,
+        # because the retirement columns are empty (not configured)
+        self.assertIn('user1', result['ServiceNow_App1']['user_guid'])
+        self.assertIn('host1', result['ServiceNow_App1']['host_guid'])
+        self.assertEqual(len(result['ServiceNow_App1']['retired_user_guid']), 0)
+        self.assertEqual(len(result['ServiceNow_App1']['retired_host_guid']), 0)
+
+    def test_merge_apps_access_retired_user(self):
+        """Test merge_apps_access routes retired user to retired_user_guid set."""
+        transform_request = main.TransformRequest(
+            result=[{
+                'u_cmdb_app_name': 'App1',
+                'u_user_guid': 'user1',
+                'u_host_guid': 'host1',
+                'sys_updated_on': '2025-05-13 20:09:59',
+                'u_idp_rule_enabled': 'true',
+                'u_idp_rule_simulation_mode': 'false',
+                'u_idp_rule_action': 'BLOCK',
+                'u_idp_rule_trigger': 'access',
+                'u_svc_retired': 'true',
+                'u_server_retired': 'false'
+            }],
+            latest_sys_updated_on='2025-05-12 18:53:31',
+            cmdb_app_name_column='u_cmdb_app_name',
+            user_guid_column='u_user_guid',
+            host_guid_column='u_host_guid',
+            sys_updated_on_column='sys_updated_on',
+            idp_enabled_column='u_idp_rule_enabled',
+            idp_action_column='u_idp_rule_action',
+            idp_trigger_column='u_idp_rule_trigger',
+            idp_rule_name_prefix='ServiceNow_',
+            idp_simulation_mode_column='u_idp_rule_simulation_mode',
+            user_retired_column='u_svc_retired',
+            host_retired_column='u_server_retired'
+        )
+        response_body = main.initialize_response_body()
+
+        result = main.merge_apps_access(self.logger, transform_request, response_body)
+
+        self.assertIn('user1', result['ServiceNow_App1']['retired_user_guid'])
+        self.assertNotIn('user1', result['ServiceNow_App1']['user_guid'])
+        self.assertIn('host1', result['ServiceNow_App1']['host_guid'])
+        self.assertNotIn('host1', result['ServiceNow_App1']['retired_host_guid'])
+
+    def test_merge_apps_access_retired_host(self):
+        """Test merge_apps_access routes retired host to retired_host_guid set."""
+        transform_request = main.TransformRequest(
+            result=[{
+                'u_cmdb_app_name': 'App1',
+                'u_user_guid': 'user1',
+                'u_host_guid': 'host1',
+                'sys_updated_on': '2025-05-13 20:09:59',
+                'u_idp_rule_enabled': 'true',
+                'u_idp_rule_simulation_mode': 'false',
+                'u_idp_rule_action': 'BLOCK',
+                'u_idp_rule_trigger': 'access',
+                'u_svc_retired': 'false',
+                'u_server_retired': 'true'
+            }],
+            latest_sys_updated_on='2025-05-12 18:53:31',
+            cmdb_app_name_column='u_cmdb_app_name',
+            user_guid_column='u_user_guid',
+            host_guid_column='u_host_guid',
+            sys_updated_on_column='sys_updated_on',
+            idp_enabled_column='u_idp_rule_enabled',
+            idp_action_column='u_idp_rule_action',
+            idp_trigger_column='u_idp_rule_trigger',
+            idp_rule_name_prefix='ServiceNow_',
+            idp_simulation_mode_column='u_idp_rule_simulation_mode',
+            user_retired_column='u_svc_retired',
+            host_retired_column='u_server_retired'
+        )
+        response_body = main.initialize_response_body()
+
+        result = main.merge_apps_access(self.logger, transform_request, response_body)
+
+        self.assertIn('host1', result['ServiceNow_App1']['retired_host_guid'])
+        self.assertNotIn('host1', result['ServiceNow_App1']['host_guid'])
+        self.assertIn('user1', result['ServiceNow_App1']['user_guid'])
+        self.assertNotIn('user1', result['ServiceNow_App1']['retired_user_guid'])
+
+    def test_merge_apps_access_conflict_last_write_wins(self):
+        """Test that for same GUID, latest sys_updated_on record wins."""
+        transform_request = main.TransformRequest(
+            result=[
+                {
+                    'u_cmdb_app_name': 'App1',
+                    'u_user_guid': 'user1',
+                    'u_host_guid': 'host1',
+                    'sys_updated_on': '2025-05-13 20:00:00',
+                    'u_idp_rule_enabled': 'true',
+                    'u_idp_rule_simulation_mode': 'false',
+                    'u_idp_rule_action': 'BLOCK',
+                    'u_idp_rule_trigger': 'access',
+                    'u_svc_retired': 'false',
+                    'u_server_retired': 'false'
+                },
+                {
+                    'u_cmdb_app_name': 'App1',
+                    'u_user_guid': 'user1',
+                    'u_host_guid': 'host1',
+                    'sys_updated_on': '2025-05-13 21:00:00',
+                    'u_idp_rule_enabled': 'true',
+                    'u_idp_rule_simulation_mode': 'false',
+                    'u_idp_rule_action': 'BLOCK',
+                    'u_idp_rule_trigger': 'access',
+                    'u_svc_retired': 'true',
+                    'u_server_retired': 'true'
+                }
+            ],
+            latest_sys_updated_on='2025-05-12 18:53:31',
+            cmdb_app_name_column='u_cmdb_app_name',
+            user_guid_column='u_user_guid',
+            host_guid_column='u_host_guid',
+            sys_updated_on_column='sys_updated_on',
+            idp_enabled_column='u_idp_rule_enabled',
+            idp_action_column='u_idp_rule_action',
+            idp_trigger_column='u_idp_rule_trigger',
+            idp_rule_name_prefix='ServiceNow_',
+            idp_simulation_mode_column='u_idp_rule_simulation_mode',
+            user_retired_column='u_svc_retired',
+            host_retired_column='u_server_retired'
+        )
+        response_body = main.initialize_response_body()
+
+        result = main.merge_apps_access(self.logger, transform_request, response_body)
+
+        # Second record (later timestamp) marks both as retired — last write wins
+        self.assertIn('user1', result['ServiceNow_App1']['retired_user_guid'])
+        self.assertNotIn('user1', result['ServiceNow_App1']['user_guid'])
+        self.assertIn('host1', result['ServiceNow_App1']['retired_host_guid'])
+        self.assertNotIn('host1', result['ServiceNow_App1']['host_guid'])
 
     def test_get_servicenow_data_function(self):
         """Test get_servicenow_data function structure"""
@@ -895,6 +1149,297 @@ class FnTestCase(unittest.TestCase):
         self.assertEqual(response_body['new'], 2)
         self.assertEqual(response_body['newPolicyRules'].count("TestRule1"), 1)
 
+    @patch('main.IdentityProtection')
+    def test_transform_rules_deletes_empty_rule_after_retirement(self, mock_idp_class):
+        """Test that _transform_rules deletes existing IDP rule when all GUIDs are retired."""
+        mock_identity_protection = MagicMock()
+        mock_idp_class.return_value = mock_identity_protection
+
+        # Query returns existing rule ID
+        mock_identity_protection.query_policy_rules.return_value = {
+            'status_code': 200,
+            'body': {'resources': ['existing_rule_id']}
+        }
+        # Get rule details returns existing conditions with one user and one host
+        mock_identity_protection.get_policy_rules.return_value = {
+            'status_code': 200,
+            'body': {
+                'resources': [{
+                    'ruleConditions': [{
+                        'sourceUser': {
+                            'entityId': {'options': {'user1': 'INCLUDED'}}
+                        },
+                        'sourceEndpoint': {
+                            'entityId': {'options': {'host1': 'EXCLUDED'}}
+                        }
+                    }]
+                }]
+            }
+        }
+        # Delete succeeds
+        mock_identity_protection.delete_policy_rules.return_value = {'status_code': 200}
+
+        request = Request()
+        request.access_token = 'test_token'
+        request.body = {
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'cmdbAppNameColumn': 'u_cmdb_app_name',
+            'userGuidColumn': 'u_user_guid',
+            'hostGuidColumn': 'u_host_guid',
+            'sysUpdatedOnColumn': 'sys_updated_on',
+            'idpEnabledColumn': 'u_idp_rule_enabled',
+            'idpActionColumn': 'u_idp_rule_action',
+            'idpTriggerColumn': 'u_idp_rule_trigger',
+            'idpRuleNamePrefix': 'ServiceNow_',
+            'idpSimulationModeColumn': 'u_idp_rule_simulation_mode',
+            'userRetiredColumn': 'u_svc_retired',
+            'hostRetiredColumn': 'u_server_retired'
+        }
+
+        # All GUIDs retired
+        result_data = [{
+            'u_cmdb_app_name': 'App1',
+            'u_user_guid': 'user1',
+            'u_host_guid': 'host1',
+            'sys_updated_on': '2025-05-13 20:09:59',
+            'u_idp_rule_enabled': 'true',
+            'u_idp_rule_simulation_mode': 'false',
+            'u_idp_rule_action': 'BLOCK',
+            'u_idp_rule_trigger': 'access',
+            'u_svc_retired': 'true',
+            'u_server_retired': 'true'
+        }]
+        response_body = main.initialize_response_body()
+
+        response = main._transform_rules(self.logger, request, result_data, response_body)  # pylint: disable=protected-access
+
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body['deleted'], 1)
+        self.assertIn('ServiceNow_App1', response.body['deletedPolicyRules'])
+        # create_policy_rule should NOT be called for empty rule
+        mock_identity_protection.create_policy_rule.assert_not_called()
+
+    @patch('main.IdentityProtection')
+    def test_transform_rules_skips_creation_for_new_empty_rule(self, mock_idp_class):
+        """Test that _transform_rules skips creation when a new rule would be empty (all retired)."""
+        mock_identity_protection = MagicMock()
+        mock_idp_class.return_value = mock_identity_protection
+
+        # No existing rule found
+        mock_identity_protection.query_policy_rules.return_value = {
+            'status_code': 404,
+            'body': {'resources': []}
+        }
+
+        request = Request()
+        request.access_token = 'test_token'
+        request.body = {
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'cmdbAppNameColumn': 'u_cmdb_app_name',
+            'userGuidColumn': 'u_user_guid',
+            'hostGuidColumn': 'u_host_guid',
+            'sysUpdatedOnColumn': 'sys_updated_on',
+            'idpEnabledColumn': 'u_idp_rule_enabled',
+            'idpActionColumn': 'u_idp_rule_action',
+            'idpTriggerColumn': 'u_idp_rule_trigger',
+            'idpRuleNamePrefix': 'ServiceNow_',
+            'idpSimulationModeColumn': 'u_idp_rule_simulation_mode',
+            'userRetiredColumn': 'u_svc_retired',
+            'hostRetiredColumn': 'u_server_retired'
+        }
+
+        result_data = [{
+            'u_cmdb_app_name': 'App1',
+            'u_user_guid': 'user1',
+            'u_host_guid': 'host1',
+            'sys_updated_on': '2025-05-13 20:09:59',
+            'u_idp_rule_enabled': 'true',
+            'u_idp_rule_simulation_mode': 'false',
+            'u_idp_rule_action': 'BLOCK',
+            'u_idp_rule_trigger': 'access',
+            'u_svc_retired': 'true',
+            'u_server_retired': 'true'
+        }]
+        response_body = main.initialize_response_body()
+
+        response = main._transform_rules(self.logger, request, result_data, response_body)  # pylint: disable=protected-access
+
+        self.assertEqual(response.code, 200)
+        # No rule created, no rule deleted (nothing existed)
+        mock_identity_protection.create_policy_rule.assert_not_called()
+        mock_identity_protection.delete_policy_rules.assert_not_called()
+        self.assertEqual(response.body['new'], 0)
+        self.assertEqual(response.body['deleted'], 0)
+
+    @patch('main.IdentityProtection')
+    def test_transform_rules_partial_retirement_preserves_existing_rule(self, mock_idp_class):
+        """Test that partial retirement of an existing rule updates it, not deletes it.
+
+        Scenario: Existing rule has user1, user3 and host1, host3. Batch retires user1/host1.
+        After merge+retirement: user3/host3 remain. Rule should be updated, not deleted.
+        """
+        mock_identity_protection = MagicMock()
+        mock_idp_class.return_value = mock_identity_protection
+
+        # Query returns existing rule ID
+        mock_identity_protection.query_policy_rules.return_value = {
+            'status_code': 200,
+            'body': {'resources': ['existing_rule_id']}
+        }
+        # Existing rule has user1, user3, host1, host3
+        mock_identity_protection.get_policy_rules.return_value = {
+            'status_code': 200,
+            'body': {
+                'resources': [{
+                    'ruleConditions': [{
+                        'sourceUser': {
+                            'entityId': {'options': {'user1': 'INCLUDED', 'user3': 'INCLUDED'}}
+                        },
+                        'sourceEndpoint': {
+                            'entityId': {'options': {'host1': 'EXCLUDED', 'host3': 'EXCLUDED'}}
+                        }
+                    }]
+                }]
+            }
+        }
+        # Delete + create succeed
+        mock_identity_protection.delete_policy_rules.return_value = {'status_code': 200}
+        mock_identity_protection.create_policy_rule.return_value = {'status_code': 200}
+
+        request = Request()
+        request.access_token = 'test_token'
+        request.body = {
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'cmdbAppNameColumn': 'u_cmdb_app_name',
+            'userGuidColumn': 'u_user_guid',
+            'hostGuidColumn': 'u_host_guid',
+            'sysUpdatedOnColumn': 'sys_updated_on',
+            'idpEnabledColumn': 'u_idp_rule_enabled',
+            'idpActionColumn': 'u_idp_rule_action',
+            'idpTriggerColumn': 'u_idp_rule_trigger',
+            'idpRuleNamePrefix': 'ServiceNow_',
+            'idpSimulationModeColumn': 'u_idp_rule_simulation_mode',
+            'userRetiredColumn': 'u_svc_retired',
+            'hostRetiredColumn': 'u_server_retired'
+        }
+
+        # Batch retires user1 and host1 only
+        result_data = [{
+            'u_cmdb_app_name': 'App1',
+            'u_user_guid': 'user1',
+            'u_host_guid': 'host1',
+            'sys_updated_on': '2025-05-13 20:09:59',
+            'u_idp_rule_enabled': 'true',
+            'u_idp_rule_simulation_mode': 'false',
+            'u_idp_rule_action': 'BLOCK',
+            'u_idp_rule_trigger': 'access',
+            'u_svc_retired': 'true',
+            'u_server_retired': 'true'
+        }]
+        response_body = main.initialize_response_body()
+
+        response = main._transform_rules(self.logger, request, result_data, response_body)  # pylint: disable=protected-access
+
+        self.assertEqual(response.code, 200)
+        # Rule should be UPDATED (delete + create), not just deleted
+        self.assertEqual(response.body['deleted'], 0)
+        self.assertEqual(response.body['updated'], 1)
+        mock_identity_protection.create_policy_rule.assert_called_once()
+        # Verify the created rule contains user3 and host3 but NOT user1 and host1
+        call_args = mock_identity_protection.create_policy_rule.call_args
+        rule_body = call_args[1]['body']
+        self.assertIn('user3', rule_body['sourceUser']['entityId']['include'])
+        self.assertNotIn('user1', rule_body['sourceUser']['entityId']['include'])
+        self.assertIn('host3', rule_body['sourceEndpoint']['entityId']['exclude'])
+        self.assertNotIn('host1', rule_body['sourceEndpoint']['entityId']['exclude'])
+
+    def test_merge_apps_access_mixed_batch(self):
+        """Test merge_apps_access with mix of active and retired records for same app."""
+        transform_request = main.TransformRequest(
+            result=[
+                {
+                    'u_cmdb_app_name': 'App1',
+                    'u_user_guid': 'user1',
+                    'u_host_guid': 'host1',
+                    'sys_updated_on': '2025-05-13 20:00:00',
+                    'u_idp_rule_enabled': 'true',
+                    'u_idp_rule_simulation_mode': 'false',
+                    'u_idp_rule_action': 'BLOCK',
+                    'u_idp_rule_trigger': 'access',
+                    'u_svc_retired': 'false',
+                    'u_server_retired': 'false'
+                },
+                {
+                    'u_cmdb_app_name': 'App1',
+                    'u_user_guid': 'user2',
+                    'u_host_guid': 'host2',
+                    'sys_updated_on': '2025-05-13 20:01:00',
+                    'u_idp_rule_enabled': 'true',
+                    'u_idp_rule_simulation_mode': 'false',
+                    'u_idp_rule_action': 'BLOCK',
+                    'u_idp_rule_trigger': 'access',
+                    'u_svc_retired': 'true',
+                    'u_server_retired': 'true'
+                }
+            ],
+            latest_sys_updated_on='2025-05-12 18:53:31',
+            cmdb_app_name_column='u_cmdb_app_name',
+            user_guid_column='u_user_guid',
+            host_guid_column='u_host_guid',
+            sys_updated_on_column='sys_updated_on',
+            idp_enabled_column='u_idp_rule_enabled',
+            idp_action_column='u_idp_rule_action',
+            idp_trigger_column='u_idp_rule_trigger',
+            idp_rule_name_prefix='ServiceNow_',
+            idp_simulation_mode_column='u_idp_rule_simulation_mode',
+            user_retired_column='u_svc_retired',
+            host_retired_column='u_server_retired'
+        )
+        response_body = main.initialize_response_body()
+
+        result = main.merge_apps_access(self.logger, transform_request, response_body)
+
+        app = result['ServiceNow_App1']
+        # user1/host1 are active
+        self.assertIn('user1', app['user_guid'])
+        self.assertIn('host1', app['host_guid'])
+        # user2/host2 are retired
+        self.assertIn('user2', app['retired_user_guid'])
+        self.assertIn('host2', app['retired_host_guid'])
+        # No cross-contamination
+        self.assertNotIn('user1', app['retired_user_guid'])
+        self.assertNotIn('host1', app['retired_host_guid'])
+        self.assertNotIn('user2', app['user_guid'])
+        self.assertNotIn('host2', app['host_guid'])
+
+    def test_get_deletion_reason_both_empty(self):
+        """Both users and hosts empty → reason includes both."""
+        user_entity_id = main.FilterCriteria(include=[], exclude=[])
+        endpoint_entity_id = main.FilterCriteria(include=[], exclude=[])
+        result = main.get_deletion_reason(user_entity_id, endpoint_entity_id)
+        self.assertEqual(result, "all users and hosts retired")
+
+    def test_get_deletion_reason_users_empty_only(self):
+        """Users empty, hosts remain → reason mentions users."""
+        user_entity_id = main.FilterCriteria(include=[], exclude=[])
+        endpoint_entity_id = main.FilterCriteria(include=[], exclude=['host1'])
+        result = main.get_deletion_reason(user_entity_id, endpoint_entity_id)
+        self.assertEqual(result, "all users retired")
+
+    def test_get_deletion_reason_hosts_empty_only(self):
+        """Hosts empty, users remain → reason mentions hosts."""
+        user_entity_id = main.FilterCriteria(include=['user1'], exclude=[])
+        endpoint_entity_id = main.FilterCriteria(include=[], exclude=[])
+        result = main.get_deletion_reason(user_entity_id, endpoint_entity_id)
+        self.assertEqual(result, "all hosts retired")
+
+    def test_get_deletion_reason_neither_empty(self):
+        """Both populated → None (no deletion)."""
+        user_entity_id = main.FilterCriteria(include=['user1'], exclude=[])
+        endpoint_entity_id = main.FilterCriteria(include=[], exclude=['host1'])
+        result = main.get_deletion_reason(user_entity_id, endpoint_entity_id)
+        self.assertIsNone(result)
+
     def test_get_table_data_transform_rules_with_config(self):
         """Test get_table_data_transform_rules with config parameter"""
         request = Request()
@@ -902,7 +1447,9 @@ class FnTestCase(unittest.TestCase):
             'apiDefinitionId': 'test_def',
             'apiOperationId': 'test_op',
             'tableName': 'test_table',
-            'latestSysUpdatedOn': '2025-05-12 18:53:31'
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'userRetiredColumn': 'u_svc_retired',
+            'hostRetiredColumn': 'u_server_retired'
         }
 
         # Test with non-empty config
@@ -914,6 +1461,238 @@ class FnTestCase(unittest.TestCase):
 
         # Will get 401 from ServiceNow API due to no auth
         self.assertEqual(response.code, 401)
+
+    @patch('main.IdentityProtection')
+    def test_transform_rules_deletes_rule_when_all_users_retired(self, mock_idp_class):
+        """Existing rule: all users retired, hosts remain → delete rule."""
+        mock_identity_protection = MagicMock()
+        mock_idp_class.return_value = mock_identity_protection
+
+        mock_identity_protection.query_policy_rules.return_value = {
+            'status_code': 200,
+            'body': {'resources': ['existing_rule_id']}
+        }
+        mock_identity_protection.get_policy_rules.return_value = {
+            'status_code': 200,
+            'body': {
+                'resources': [{
+                    'ruleConditions': [{
+                        'sourceUser': {
+                            'entityId': {'options': {'user1': 'INCLUDED'}}
+                        },
+                        'sourceEndpoint': {
+                            'entityId': {'options': {'host1': 'EXCLUDED'}}
+                        }
+                    }]
+                }]
+            }
+        }
+        mock_identity_protection.delete_policy_rules.return_value = {'status_code': 200}
+
+        request = Request()
+        request.access_token = 'test_token'
+        request.body = {
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'cmdbAppNameColumn': 'u_cmdb_app_name',
+            'userGuidColumn': 'u_user_guid',
+            'hostGuidColumn': 'u_host_guid',
+            'sysUpdatedOnColumn': 'sys_updated_on',
+            'idpEnabledColumn': 'u_idp_rule_enabled',
+            'idpActionColumn': 'u_idp_rule_action',
+            'idpTriggerColumn': 'u_idp_rule_trigger',
+            'idpRuleNamePrefix': 'ServiceNow_',
+            'idpSimulationModeColumn': 'u_idp_rule_simulation_mode',
+            'userRetiredColumn': 'u_svc_retired',
+            'hostRetiredColumn': 'u_server_retired'
+        }
+
+        # user1 retired, host1 active — only users empty after retirement
+        result_data = [{
+            'u_cmdb_app_name': 'App1',
+            'u_user_guid': 'user1',
+            'u_host_guid': 'host1',
+            'sys_updated_on': '2025-05-13 20:09:59',
+            'u_idp_rule_enabled': 'true',
+            'u_idp_rule_simulation_mode': 'false',
+            'u_idp_rule_action': 'BLOCK',
+            'u_idp_rule_trigger': 'access',
+            'u_svc_retired': 'true',
+            'u_server_retired': 'false'
+        }]
+        response_body = main.initialize_response_body()
+
+        response = main._transform_rules(self.logger, request, result_data, response_body)  # pylint: disable=protected-access
+
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body['deleted'], 1)
+        self.assertIn('ServiceNow_App1', response.body['deletedPolicyRules'])
+        mock_identity_protection.create_policy_rule.assert_not_called()
+
+    @patch('main.IdentityProtection')
+    def test_transform_rules_deletes_rule_when_all_hosts_retired(self, mock_idp_class):
+        """Existing rule: all hosts retired, users remain → delete rule."""
+        mock_identity_protection = MagicMock()
+        mock_idp_class.return_value = mock_identity_protection
+
+        mock_identity_protection.query_policy_rules.return_value = {
+            'status_code': 200,
+            'body': {'resources': ['existing_rule_id']}
+        }
+        mock_identity_protection.get_policy_rules.return_value = {
+            'status_code': 200,
+            'body': {
+                'resources': [{
+                    'ruleConditions': [{
+                        'sourceUser': {
+                            'entityId': {'options': {'user1': 'INCLUDED'}}
+                        },
+                        'sourceEndpoint': {
+                            'entityId': {'options': {'host1': 'EXCLUDED'}}
+                        }
+                    }]
+                }]
+            }
+        }
+        mock_identity_protection.delete_policy_rules.return_value = {'status_code': 200}
+
+        request = Request()
+        request.access_token = 'test_token'
+        request.body = {
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'cmdbAppNameColumn': 'u_cmdb_app_name',
+            'userGuidColumn': 'u_user_guid',
+            'hostGuidColumn': 'u_host_guid',
+            'sysUpdatedOnColumn': 'sys_updated_on',
+            'idpEnabledColumn': 'u_idp_rule_enabled',
+            'idpActionColumn': 'u_idp_rule_action',
+            'idpTriggerColumn': 'u_idp_rule_trigger',
+            'idpRuleNamePrefix': 'ServiceNow_',
+            'idpSimulationModeColumn': 'u_idp_rule_simulation_mode',
+            'userRetiredColumn': 'u_svc_retired',
+            'hostRetiredColumn': 'u_server_retired'
+        }
+
+        # user1 active, host1 retired — only hosts empty after retirement
+        result_data = [{
+            'u_cmdb_app_name': 'App1',
+            'u_user_guid': 'user1',
+            'u_host_guid': 'host1',
+            'sys_updated_on': '2025-05-13 20:09:59',
+            'u_idp_rule_enabled': 'true',
+            'u_idp_rule_simulation_mode': 'false',
+            'u_idp_rule_action': 'BLOCK',
+            'u_idp_rule_trigger': 'access',
+            'u_svc_retired': 'false',
+            'u_server_retired': 'true'
+        }]
+        response_body = main.initialize_response_body()
+
+        response = main._transform_rules(self.logger, request, result_data, response_body)  # pylint: disable=protected-access
+
+        self.assertEqual(response.code, 200)
+        self.assertEqual(response.body['deleted'], 1)
+        self.assertIn('ServiceNow_App1', response.body['deletedPolicyRules'])
+        mock_identity_protection.create_policy_rule.assert_not_called()
+
+    @patch('main.IdentityProtection')
+    def test_transform_rules_skips_new_rule_users_only(self, mock_idp_class):
+        """New rule with only users (all hosts retired) → skip creation."""
+        mock_identity_protection = MagicMock()
+        mock_idp_class.return_value = mock_identity_protection
+
+        mock_identity_protection.query_policy_rules.return_value = {
+            'status_code': 404,
+            'body': {'resources': []}
+        }
+
+        request = Request()
+        request.access_token = 'test_token'
+        request.body = {
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'cmdbAppNameColumn': 'u_cmdb_app_name',
+            'userGuidColumn': 'u_user_guid',
+            'hostGuidColumn': 'u_host_guid',
+            'sysUpdatedOnColumn': 'sys_updated_on',
+            'idpEnabledColumn': 'u_idp_rule_enabled',
+            'idpActionColumn': 'u_idp_rule_action',
+            'idpTriggerColumn': 'u_idp_rule_trigger',
+            'idpRuleNamePrefix': 'ServiceNow_',
+            'idpSimulationModeColumn': 'u_idp_rule_simulation_mode',
+            'userRetiredColumn': 'u_svc_retired',
+            'hostRetiredColumn': 'u_server_retired'
+        }
+
+        # user1 active, host1 retired → hosts empty, users populated → skip
+        result_data = [{
+            'u_cmdb_app_name': 'App1',
+            'u_user_guid': 'user1',
+            'u_host_guid': 'host1',
+            'sys_updated_on': '2025-05-13 20:09:59',
+            'u_idp_rule_enabled': 'true',
+            'u_idp_rule_simulation_mode': 'false',
+            'u_idp_rule_action': 'BLOCK',
+            'u_idp_rule_trigger': 'access',
+            'u_svc_retired': 'false',
+            'u_server_retired': 'true'
+        }]
+        response_body = main.initialize_response_body()
+
+        response = main._transform_rules(self.logger, request, result_data, response_body)  # pylint: disable=protected-access
+
+        self.assertEqual(response.code, 200)
+        mock_identity_protection.create_policy_rule.assert_not_called()
+        mock_identity_protection.delete_policy_rules.assert_not_called()
+        self.assertEqual(response.body['new'], 0)
+
+    @patch('main.IdentityProtection')
+    def test_transform_rules_skips_new_rule_hosts_only(self, mock_idp_class):
+        """New rule with only hosts (all users retired) → skip creation."""
+        mock_identity_protection = MagicMock()
+        mock_idp_class.return_value = mock_identity_protection
+
+        mock_identity_protection.query_policy_rules.return_value = {
+            'status_code': 404,
+            'body': {'resources': []}
+        }
+
+        request = Request()
+        request.access_token = 'test_token'
+        request.body = {
+            'latestSysUpdatedOn': '2025-05-12 18:53:31',
+            'cmdbAppNameColumn': 'u_cmdb_app_name',
+            'userGuidColumn': 'u_user_guid',
+            'hostGuidColumn': 'u_host_guid',
+            'sysUpdatedOnColumn': 'sys_updated_on',
+            'idpEnabledColumn': 'u_idp_rule_enabled',
+            'idpActionColumn': 'u_idp_rule_action',
+            'idpTriggerColumn': 'u_idp_rule_trigger',
+            'idpRuleNamePrefix': 'ServiceNow_',
+            'idpSimulationModeColumn': 'u_idp_rule_simulation_mode',
+            'userRetiredColumn': 'u_svc_retired',
+            'hostRetiredColumn': 'u_server_retired'
+        }
+
+        # user1 retired, host1 active → users empty, hosts populated → skip
+        result_data = [{
+            'u_cmdb_app_name': 'App1',
+            'u_user_guid': 'user1',
+            'u_host_guid': 'host1',
+            'sys_updated_on': '2025-05-13 20:09:59',
+            'u_idp_rule_enabled': 'true',
+            'u_idp_rule_simulation_mode': 'false',
+            'u_idp_rule_action': 'BLOCK',
+            'u_idp_rule_trigger': 'access',
+            'u_svc_retired': 'true',
+            'u_server_retired': 'false'
+        }]
+        response_body = main.initialize_response_body()
+
+        response = main._transform_rules(self.logger, request, result_data, response_body)  # pylint: disable=protected-access
+
+        self.assertEqual(response.code, 200)
+        mock_identity_protection.create_policy_rule.assert_not_called()
+        mock_identity_protection.delete_policy_rules.assert_not_called()
+        self.assertEqual(response.body['new'], 0)
 
 
 if __name__ == '__main__':
