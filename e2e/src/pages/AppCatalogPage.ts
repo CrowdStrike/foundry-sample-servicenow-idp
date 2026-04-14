@@ -36,7 +36,7 @@ export class AppCatalogPage extends BasePage {
     const baseUrl = config.falconBaseUrl || 'https://falcon.us-2.crowdstrike.com';
     const filterParam = encodeURIComponent(`name:~'${appName}'`);
     await this.page.goto(`${baseUrl}/foundry/app-catalog?filter=${filterParam}`);
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('domcontentloaded');
 
     const appLink = this.page.getByRole('link', { name: appName, exact: true });
 
@@ -47,7 +47,7 @@ export class AppCatalogPage extends BasePage {
       });
       this.logger.success(`Found app '${appName}' in catalog`);
       await this.smartClick(appLink, `App '${appName}' link`);
-      await this.page.waitForLoadState('networkidle');
+      await this.page.waitForLoadState('domcontentloaded');
     } catch (error) {
       throw new Error(`Could not find app '${appName}' in catalog. Make sure the app is deployed.`);
     }
