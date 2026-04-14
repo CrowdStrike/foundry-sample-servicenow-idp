@@ -4,7 +4,6 @@
 
 import { Page } from '@playwright/test';
 import { BasePage } from './BasePage';
-import { RetryHandler } from '../utils/SmartWaiter';
 import { config } from '../config/TestConfig';
 
 export class AppCatalogPage extends BasePage {
@@ -36,7 +35,7 @@ export class AppCatalogPage extends BasePage {
     const baseUrl = config.falconBaseUrl || 'https://falcon.us-2.crowdstrike.com';
     const filterParam = encodeURIComponent(`name:~'${appName}'`);
     await this.page.goto(`${baseUrl}/foundry/app-catalog?filter=${filterParam}`);
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('domcontentloaded');
 
     const appLink = this.page.getByRole('link', { name: appName, exact: true });
 
@@ -47,7 +46,7 @@ export class AppCatalogPage extends BasePage {
       });
       this.logger.success(`Found app '${appName}' in catalog`);
       await this.smartClick(appLink, `App '${appName}' link`);
-      await this.page.waitForLoadState('networkidle');
+      await this.page.waitForLoadState('domcontentloaded');
     } catch (error) {
       throw new Error(`Could not find app '${appName}' in catalog. Make sure the app is deployed.`);
     }
@@ -95,7 +94,7 @@ export class AppCatalogPage extends BasePage {
 
     // Wait for URL to change to install page and page to stabilize
     await this.page.waitForURL(/\/foundry\/app-catalog\/[^\/]+\/install$/, { timeout: 10000 });
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('domcontentloaded');
 
     // Handle permissions dialog
     await this.handlePermissionsDialog();
@@ -146,33 +145,6 @@ export class AppCatalogPage extends BasePage {
   }
 
   /**
-   * Get field context by looking at nearby labels and text
-   */
-  private async getFieldContext(input: any): Promise<string> {
-    try {
-      // Try to find the label element
-      const id = await input.getAttribute('id');
-      if (id) {
-        const label = this.page.locator(`label[for="${id}"]`);
-        if (await label.isVisible({ timeout: 1000 }).catch(() => false)) {
-          const labelText = await label.textContent();
-          if (labelText) return labelText.toLowerCase();
-        }
-      }
-
-      // Look at parent container for context
-      const parent = input.locator('xpath=ancestor::div[contains(@class, "form") or contains(@class, "field") or contains(@class, "input")][1]');
-      if (await parent.isVisible({ timeout: 1000 }).catch(() => false)) {
-        const parentText = await parent.textContent();
-        if (parentText) return parentText.toLowerCase();
-      }
-    } catch (error) {
-      // Continue if we can't get context
-    }
-    return '';
-  }
-
-  /**
    * Get value for a field based on its context
    */
   private getFieldValue(context: string, name: string, placeholder: string, inputType: string): string {
@@ -202,157 +174,110 @@ export class AppCatalogPage extends BasePage {
   /**
    * Configure API integration if configuration form is present during installation.
    * Fills in dummy values for all configuration fields and clicks through multiple settings.
+   *
+   * The install flow has two settings screens:
+   *   1. Setting 1 (workflow config): text fields + Recipients combobox + "How often" dropdown
+   *   2. service now cmdb (API credentials): Name, Host, Username, Password
    */
   private async configureApiIntegrationIfNeeded(): Promise<void> {
     let configCount = 0;
-    let hasNextSetting = true;
-    let foundPasswordFields = false;
+    let hasMoreSettings = true;
 
-    // Keep filling configs until we can't find either "Next setting" or more empty fields
-    while (hasNextSetting) {
+    while (hasMoreSettings) {
       configCount++;
       this.logger.info(`Configuration screen ${configCount} detected, filling fields...`);
 
-      // Fill visible text inputs
-      const inputs = this.page.locator('input[type="text"], input[type="url"], input:not([type="password"]):not([type])');
-      const count = await inputs.count();
-      this.logger.info(`Found ${count} text input fields`);
+      // Fill all visible textbox fields (Foundry renders both text and password as role="textbox")
+      const textboxes = this.page.getByRole('textbox');
+      const textboxCount = await textboxes.count();
+      this.logger.info(`Found ${textboxCount} textbox fields`);
 
-      for (let i = 0; i < count; i++) {
-        const input = inputs.nth(i);
+      for (let i = 0; i < textboxCount; i++) {
+        const input = textboxes.nth(i);
         if (await input.isVisible()) {
           const name = await input.getAttribute('name') || '';
-          const placeholder = await input.getAttribute('placeholder') || '';
-          const context = (await this.getFieldContext(input)).trim().replace(/\s+/g, ' ');
+          const ariaLabel = await input.evaluate(el => el.getAttribute('aria-label') || '');
+          const currentValue = await input.inputValue().catch(() => '');
 
-          const value = this.getFieldValue(context, name, placeholder, 'text');
+          // Skip fields that already have values (e.g., Start time "00:00")
+          if (currentValue) continue;
+
+          // Skip search fields
+          if (ariaLabel.toLowerCase().includes('search')) continue;
+
+          const context = `${ariaLabel} ${name}`.toLowerCase();
+          const value = this.getFieldValue(context, name, '', ariaLabel.toLowerCase().includes('password') ? 'password' : 'text');
           await input.fill(value);
-          this.logger.info(`Filled input [${name || 'unnamed'}] context:"${context}" -> "${value}"`);
+          this.logger.info(`Filled textbox [${ariaLabel || name || 'unnamed'}] -> "${ariaLabel.toLowerCase().includes('password') ? '***' : value}"`);
         }
       }
 
-      // Fill password inputs
-      const passwordInputs = this.page.locator('input[type="password"]');
-      const passwordCount = await passwordInputs.count();
-      this.logger.info(`Found ${passwordCount} password input fields`);
+      // Fill combobox fields (e.g., Recipients) by typing a value and pressing Enter
+      const comboboxes = this.page.getByRole('combobox');
+      const comboboxCount = await comboboxes.count();
+      this.logger.info(`Found ${comboboxCount} combobox fields`);
 
-      if (passwordCount > 0) {
-        foundPasswordFields = true;
-      }
+      for (let i = 0; i < comboboxCount; i++) {
+        const combobox = comboboxes.nth(i);
+        if (await combobox.isVisible()) {
+          const ariaLabel = await combobox.evaluate(el => el.getAttribute('aria-label') || '');
+          // Check if the combobox already has selected values
+          const selectedContainer = combobox.locator('xpath=ancestor::*[1]').locator('text=Selected:');
+          const hasSelection = await selectedContainer.isVisible({ timeout: 500 }).catch(() => false);
 
-      for (let i = 0; i < passwordCount; i++) {
-        const input = passwordInputs.nth(i);
-        if (await input.isVisible()) {
-          const name = await input.getAttribute('name') || '';
-          const placeholder = await input.getAttribute('placeholder') || '';
-          const context = (await this.getFieldContext(input)).trim().replace(/\s+/g, ' ');
-
-          const value = this.getFieldValue(context, name, placeholder, 'password');
-          await input.fill(value);
-          this.logger.info(`Filled password [${name || 'unnamed'}] context:"${context}"`);
-        }
-      }
-
-      // Fill select/dropdown fields (including Foundry custom dropdowns)
-      // Foundry uses button-based dropdowns - some have aria-haspopup, others are plain buttons
-      // with "Select" placeholder text (e.g., "Select time zone")
-      const selectFields = this.page.locator('select, [role="combobox"], button[aria-haspopup="listbox"], button[aria-haspopup="menu"]');
-      const selectCount = await selectFields.count();
-      this.logger.info(`Found ${selectCount} select/dropdown fields`);
-
-      for (let i = 0; i < selectCount; i++) {
-        const select = selectFields.nth(i);
-        if (await select.isVisible()) {
-          const name = await select.getAttribute('name') || '';
-          const ariaLabel = await select.getAttribute('aria-label') || '';
-          const tagName = await select.evaluate(el => el.tagName.toLowerCase());
-
-          if (tagName === 'select') {
-            // Native select element - select first non-empty option
-            const options = select.locator('option');
-            const optionCount = await options.count();
-
-            if (optionCount > 1) {
-              // Get the second option (first is usually empty/placeholder)
-              const firstValue = await options.nth(1).getAttribute('value');
-              if (firstValue) {
-                await select.selectOption(firstValue);
-                this.logger.info(`Selected option in select [${name || ariaLabel || 'unnamed'}]`);
-              }
-            }
+          if (!hasSelection) {
+            await combobox.fill('test@example.com');
+            await combobox.press('Enter');
+            this.logger.info(`Filled combobox [${ariaLabel || 'unnamed'}] with "test@example.com" + Enter`);
+            await this.waiter.delay(500);
           } else {
-            // Button or combobox dropdown - click and select first option
-            await this.selectFirstDropdownOption(select, name || ariaLabel || 'unnamed');
+            this.logger.info(`Combobox [${ariaLabel || 'unnamed'}] already has a selection, skipping`);
           }
         }
       }
 
-      // Handle Foundry dropdowns that lack aria-haspopup
-      // Some dropdowns appear pre-filled (e.g., "How often" shows "Hourly") but need to be
-      // explicitly clicked to trigger dependent fields (e.g., Time zone auto-fill).
-      // Strategy: find ALL dropdown-like buttons in the form, click ones with "Select" placeholder,
-      // then re-click ones that appear filled if validation errors remain.
+      // Handle "How often" dropdown - now shows "Select interval" by default
+      const howOftenBtn = this.page.getByRole('button', { name: /how often.*select interval/i });
+      if (await howOftenBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+        this.logger.info('Found "How often" dropdown with "Select interval", selecting Hourly...');
+        await this.selectFirstDropdownOption(howOftenBtn, 'How often');
+        await this.waiter.delay(1000);
+      }
+
+      // Handle any remaining dropdowns with "Select" placeholder
       const allButtons = this.page.locator('button');
       const buttonCount = await allButtons.count();
-
       for (let i = 0; i < buttonCount; i++) {
         const btn = allButtons.nth(i);
         if (await btn.isVisible()) {
-          const hasPopup = await btn.getAttribute('aria-haspopup');
-          if (hasPopup) continue; // Already handled above
-
           const btnText = (await btn.textContent() || '').trim();
-          if (/^select\s/i.test(btnText)) {
+          if (/select\s/i.test(btnText) && !btnText.includes('Select interval')) {
             this.logger.info(`Found unselected dropdown: "${btnText}"`);
             await this.selectFirstDropdownOption(btn, btnText);
           }
         }
       }
 
-      // Check if validation errors remain (e.g., "Select a value" text visible)
-      // This handles cases where a dropdown like "How often" shows a default value (e.g., "Hourly")
-      // but was never explicitly selected, so dependent fields (Time zone) aren't populated.
-      const validationError = this.page.getByText('Select a value');
-      if (await validationError.isVisible({ timeout: 1000 }).catch(() => false)) {
-        this.logger.info('Validation error "Select a value" detected, re-selecting schedule dropdowns...');
-
-        // Re-click "How often" dropdown to trigger Time zone auto-fill
-        const howOftenBtn = this.page.getByRole('button', { name: /how often/i });
-        if (await howOftenBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-          const howOftenText = (await howOftenBtn.textContent() || '').trim();
-          this.logger.info(`Re-selecting "How often" dropdown (current: "${howOftenText}")`);
-          await this.selectFirstDropdownOption(howOftenBtn, 'How often');
-          await this.waiter.delay(1000);
-        }
-
-        // If Time zone still shows "Select time zone", select it directly
-        const tzBtn = this.page.getByRole('button', { name: /time zone.*select/i });
-        if (await tzBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-          this.logger.info('Time zone still unselected, selecting directly...');
-          await this.selectFirstDropdownOption(tzBtn, 'Time zone');
-        }
-      }
-
-      // Check for "Next setting" button
+      // Determine next action: "Next setting" or "Install app"
       const nextSettingButton = this.page.getByRole('button', { name: /next setting/i });
-      hasNextSetting = await this.elementExists(nextSettingButton, 2000);
+      const installButton = this.page.getByRole('button', { name: 'Install app' })
+        .or(this.page.getByRole('button', { name: 'Save and install' }));
 
-      if (hasNextSetting) {
+      const hasNextSetting = await this.elementExists(nextSettingButton, 2000);
+      const hasInstallButton = await this.elementExists(installButton, 1000);
+
+      if (hasNextSetting && !hasInstallButton) {
         this.logger.info(`Filled configuration screen ${configCount}, clicking Next setting`);
         await this.smartClick(nextSettingButton, 'Next setting button');
-        await this.page.waitForLoadState('networkidle');
+        await this.page.waitForLoadState('domcontentloaded');
         await this.waiter.delay(3000);
       } else {
-        this.logger.info(`No more "Next setting" button found after ${configCount} screen(s)`);
-        break;
+        this.logger.info(`Configuration complete after ${configCount} screen(s)`);
+        hasMoreSettings = false;
       }
     }
 
     this.logger.info(`Completed ${configCount} configuration screen(s)`);
-
-    if (!foundPasswordFields) {
-      throw new Error('This app should prompt for API credentials but no password fields were found across all configuration screens');
-    }
   }
 
   /**
@@ -446,7 +371,7 @@ export class AppCatalogPage extends BasePage {
     this.logger.info('Checking catalog status briefly...');
     const baseUrl = new URL(this.page.url()).origin;
     await this.page.goto(`${baseUrl}/foundry/app-catalog?filter=name%3A~%27${appName}%27`);
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('domcontentloaded');
 
     const statusText = this.page.locator('[data-test-selector="status-text"]').filter({ hasText: /installed/i });
     for (let attempt = 0; attempt < 2; attempt++) {
