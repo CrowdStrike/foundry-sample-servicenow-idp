@@ -76,8 +76,8 @@ The workflow also sends an HTML email execution summary via the SendEmail action
 
 The function accepts two optional parameters — `hostRetiredColumn` and `userRetiredColumn` — that enable retirement detection. These fields are optional; all existing functionality works as-is without them. When configured, the function removes retired GUIDs from existing IDP policy rules and applies the following deletion logic:
 
-- **Users retired, only hosts remain**: The entire policy rule is deleted. Keeping a host-only rule would block all users from accessing that server.
-- **Hosts retired, only users remain**: The entire policy rule is deleted. Keeping a user-only rule would block those users everywhere.
+- **Users retired, only hosts remain**: The entire policy rule is deleted because a rule requires both user and host entities to be valid.
+- **Hosts retired, only users remain**: The entire policy rule is deleted for the same reason.
 - **Both users and hosts retired**: The policy rule is deleted.
 - **Partial retirement (active users and hosts still exist)**: The retired GUIDs are removed and the policy rule is updated with the remaining active entries.
 
