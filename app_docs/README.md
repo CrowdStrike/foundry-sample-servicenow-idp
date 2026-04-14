@@ -10,6 +10,8 @@ Target users include organizations that use both CrowdStrike IDP and ServiceNow 
 - **Initial Bulk Synchronization**: Performs "Cold Boot" processing of existing ServiceNow CMDB access relationships
 - **Reconciliation Logic**: Implements periodic checks to verify ServiceNow CMDB and IDP policies remain in sync
 - **Policy Management**: Handles the creation, and effective updating of IDP policies despite API limitations
+- **Policy Deletion for Retired Users/Hosts**: Automatically deletes IDP policies when associated users or hosts are marked as retired via `userRetired` and `hostRetired` columns in ServiceNow CMDB
+- **Email Notification Summaries**: Sends an HTML email summary after each workflow execution with counts of policy actions taken
 
 ## 3. Installation Guide
 ### Prerequisites
@@ -27,8 +29,13 @@ Target users include organizations that use both CrowdStrike IDP and ServiceNow 
 6. Configure ServiceNow connection settings:
     - ServiceNow instance URL
     - Service account credentials
-7. Configure Workflow parameters.
-8. Execute ServiceNow to IDP policy rules synchronizer workflow
+7. Configure email recipients for execution summary notifications (required field)
+8. Configure schedule trigger settings:
+    - How often (e.g., hourly, daily)
+    - Start time
+    - Time zone
+9. Configure Workflow parameters.
+10. Execute ServiceNow to IDP policy rules synchronizer workflow
 
 ## 4. User Guide
 ### ServiceNow CMDB Table
@@ -65,6 +72,15 @@ This workflow can be triggered manually to reset the checkpoint time when record
 ##### ServiceNow to IDP policy rules synchronizer
 This workflow serves as the main execution engine of the application, orchestrating all artifacts to perform the synchronization process. Upon completion of each run, it writes a summary record to LogScale that can be leveraged to create NG-SIEM dashboards and alerts for monitoring synchronization status.
 
+The workflow also sends an HTML email execution summary via the SendEmail action, reporting counts of new, updated, deleted, and ignored policy rules. Workflow variables `totalNewPolicies`, `totalPoliciesUpdated`, `totalPoliciesDeleted`, and `totalIgnoredPolicies` track these totals across the run.
+
+The function accepts two optional parameters — `hostRetiredColumn` and `userRetiredColumn` — that enable retirement detection. These fields are optional; all existing functionality works as-is without them. When configured, the function removes retired GUIDs from existing IDP policy rules and applies the following deletion logic:
+
+- **Users retired, only hosts remain**: The entire policy rule is deleted because a rule requires both user and host entities to be valid.
+- **Hosts retired, only users remain**: The entire policy rule is deleted for the same reason.
+- **Both users and hosts retired**: The policy rule is deleted.
+- **Partial retirement (active users and hosts still exist)**: The retired GUIDs are removed and the policy rule is updated with the remaining active entries.
+
 ![IDP Policy rules](idpPolicyRules.png)
 
 The records written to LogScale by the app can be fetched as shown below from NG SIEM.
@@ -93,8 +109,6 @@ The records written to LogScale by the app can be fetched as shown below from NG
 - Enhanced dashboard for monitoring policy synchronization status
 - Support for additional access types beyond the initial implementation
 - Custom approval workflows
-- Handle deletion of access from ServiceNow CMDB
-- Handle pagination in the ServiceNow Table API response
 
 ## 7. Technical Specifications
 ### Performance Considerations
