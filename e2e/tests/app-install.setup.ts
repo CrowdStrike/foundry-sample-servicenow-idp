@@ -16,7 +16,7 @@ setup('install app', async ({ page }) => {
       // Screen 2: Workflow configuration fields
       const nextButton = page.getByRole('button', { name: /next setting/i });
       await nextButton.click();
-      await page.waitForLoadState('networkidle').catch(() => {});
+      await page.waitForLoadState('domcontentloaded').catch(() => {});
 
       // Required workflow config fields from ServiceNow_to_IDP_policy_rules_synchronizer.yml
       await page.getByLabel('CmdbAppNameColumn').fill('name');
