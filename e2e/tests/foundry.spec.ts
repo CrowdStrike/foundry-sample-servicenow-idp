@@ -39,12 +39,11 @@ test.describe('ServiceNow IDP - E2E Tests', () => {
     await searchBox.clear();
     await searchBox.pressSequentially(actionName, { delay: 20 });
 
-    // Wait for search results to load
-    await loadingMessages.first().waitFor({ state: 'hidden', timeout: 60000 }).catch(() => {});
-    await page.waitForLoadState('domcontentloaded');
+    // Wait for search results to filter (indicated by "Top results" appearing)
+    await page.getByText('Top results').waitFor({ state: 'visible', timeout: 30000 });
 
-    // Expand "Other (Custom, Foundry, etc.)" section if it exists
-    const otherSection = page.getByText('Other (Custom, Foundry, etc.)');
+    // Expand "Other" section if it exists (label may vary across versions)
+    const otherSection = page.getByText(/^Other \(/);
     if (await otherSection.isVisible({ timeout: 2000 }).catch(() => false)) {
       await otherSection.click();
 

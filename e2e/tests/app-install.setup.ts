@@ -7,20 +7,10 @@ setup('install app', async ({ page }) => {
 
   await catalog.installApp(config.appName, {
     configureSettings: async (page) => {
-      // Screen 1: ServiceNow API integration (basic auth, multi-instance)
-      await page.getByLabel('Name').first().fill('ServiceNow Test Instance');
-      await page.getByLabel('Host').fill('https://example.service-now.com');
-      await page.getByLabel('Username').fill('foundry_test_user');
-      await page.getByLabel('Password').fill('test-password');
-
-      // Screen 2: Workflow configuration fields
-      const nextButton = page.getByRole('button', { name: /next setting/i });
-      await nextButton.click();
-      await page.waitForLoadState('domcontentloaded').catch(() => {});
-
-      // Required workflow config fields from ServiceNow_to_IDP_policy_rules_synchronizer.yml
+      // Setting 1: Workflow configuration fields
       await page.getByLabel('CmdbAppNameColumn').fill('name');
       await page.getByLabel('HostGuidColumn').fill('host_guid');
+      await page.getByLabel('HostRetiredColumn').fill('u_host_retired');
       await page.getByLabel('IdpActionColumn').fill('u_idp_action');
       await page.getByLabel('IdpEnabledColumn').fill('u_idp_enabled');
       await page.getByLabel('IdpRuleNamePrefix').fill('SN-');
@@ -29,23 +19,11 @@ setup('install app', async ({ page }) => {
       await page.getByLabel('SysUpdatedOnColumn').fill('sys_updated_on');
       await page.getByLabel('TableName').fill('cmdb_ci_server');
       await page.getByLabel('UserGuidColumn').fill('user_guid');
-
-      // Optional fields
-      const hostRetiredField = page.getByLabel('HostRetiredColumn');
-      if (await hostRetiredField.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await hostRetiredField.fill('u_host_retired');
-      }
-      const userRetiredField = page.getByLabel('UserRetiredColumn');
-      if (await userRetiredField.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await userRetiredField.fill('u_user_retired');
-      }
-      const sysParamLimitField = page.getByLabel('SysParamLimit');
-      if (await sysParamLimitField.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await sysParamLimitField.fill('100');
-      }
+      await page.getByLabel('UserRetiredColumn').fill('u_user_retired');
+      await page.getByLabel('SysParamLimit').fill('100');
 
       // Email recipient (combobox)
-      const toCombobox = page.getByRole('combobox');
+      const toCombobox = page.getByRole('combobox', { name: 'Recipients' });
       if (await toCombobox.isVisible({ timeout: 2000 }).catch(() => false)) {
         await toCombobox.click();
         await toCombobox.fill('test@example.com');
@@ -59,6 +37,17 @@ setup('install app', async ({ page }) => {
       const firstOption = page.locator('[role="option"]').first();
       await firstOption.waitFor({ state: 'visible', timeout: 5000 });
       await firstOption.click();
+
+      // Navigate to Setting 2: ServiceNow API integration
+      const nextButton = page.getByRole('button', { name: /next setting/i });
+      await nextButton.click();
+      await page.waitForLoadState('domcontentloaded').catch(() => {});
+
+      // ServiceNow API integration (basic auth)
+      await page.getByRole('textbox', { name: 'Name', exact: true }).fill('ServiceNow Test Instance');
+      await page.getByRole('textbox', { name: 'Host', exact: true }).fill(process.env.SERVICENOW_INSTANCE_URL || 'https://example.service-now.com');
+      await page.getByRole('textbox', { name: 'Username' }).fill(process.env.SERVICENOW_USERNAME || 'foundry_test_user');
+      await page.getByRole('textbox', { name: 'Password' }).fill(process.env.SERVICENOW_PASSWORD || 'test-password');
     },
   });
 });
