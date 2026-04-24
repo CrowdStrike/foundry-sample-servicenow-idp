@@ -7,7 +7,17 @@ setup('install app', async ({ page }) => {
 
   await catalog.installApp(config.appName, {
     configureSettings: async (page) => {
-      // Setting 1: Workflow configuration fields
+      // Setting 1: ServiceNow API integration (basic auth)
+      await page.getByRole('textbox', { name: 'Name', exact: true }).fill('ServiceNow Test Instance');
+      await page.getByRole('textbox', { name: 'Host', exact: true }).fill(process.env.SERVICENOW_INSTANCE_URL || 'https://example.service-now.com');
+      await page.getByRole('textbox', { name: 'Username' }).fill(process.env.SERVICENOW_USERNAME || 'foundry_test_user');
+      await page.getByRole('textbox', { name: 'Password' }).fill(process.env.SERVICENOW_PASSWORD || 'test-password');
+
+      // Navigate to Setting 2: Workflow configuration fields
+      const nextButton = page.getByRole('button', { name: /next setting/i });
+      await nextButton.click();
+      await page.waitForLoadState('domcontentloaded').catch(() => {});
+
       await page.getByLabel('CmdbAppNameColumn').fill('name');
       await page.getByLabel('HostGuidColumn').fill('host_guid');
       await page.getByLabel('HostRetiredColumn').fill('u_host_retired');
@@ -37,17 +47,6 @@ setup('install app', async ({ page }) => {
       const firstOption = page.locator('[role="option"]').first();
       await firstOption.waitFor({ state: 'visible', timeout: 5000 });
       await firstOption.click();
-
-      // Navigate to Setting 2: ServiceNow API integration
-      const nextButton = page.getByRole('button', { name: /next setting/i });
-      await nextButton.click();
-      await page.waitForLoadState('domcontentloaded').catch(() => {});
-
-      // ServiceNow API integration (basic auth)
-      await page.getByRole('textbox', { name: 'Name', exact: true }).fill('ServiceNow Test Instance');
-      await page.getByRole('textbox', { name: 'Host', exact: true }).fill(process.env.SERVICENOW_INSTANCE_URL || 'https://example.service-now.com');
-      await page.getByRole('textbox', { name: 'Username' }).fill(process.env.SERVICENOW_USERNAME || 'foundry_test_user');
-      await page.getByRole('textbox', { name: 'Password' }).fill(process.env.SERVICENOW_PASSWORD || 'test-password');
     },
   });
 });
