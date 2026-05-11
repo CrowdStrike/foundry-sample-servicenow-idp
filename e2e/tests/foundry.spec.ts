@@ -3,38 +3,35 @@ import { test, expect } from '../src/fixtures';
 test.describe.configure({ mode: 'serial' });
 
 test.describe('ServiceNow IDP - E2E Tests', () => {
-  test('should verify ServiceNow API integration action is available in workflow builder', async ({ workflowsPage }) => {
-    // This app requires ServiceNow API credentials which we don't have in E2E tests
-    // We disable workflow provisioning on install to avoid credential validation
-    // Instead, we verify the API integration action is available in the workflow builder
-    test.setTimeout(90000); // 90 seconds
+  test('should verify ServiceNow API integration action is available in workflow builder', async ({ page, workflowsPage }) => {
+    test.setTimeout(90000);
     await workflowsPage.navigateToWorkflows();
     await workflowsPage.createNewWorkflow();
 
     // Select "On demand" trigger
-    const onDemandTrigger = workflowsPage.page.getByText('On demand').first();
+    const onDemandTrigger = page.getByText('On demand').first();
     await onDemandTrigger.click();
 
-    const nextButton = workflowsPage.page.getByRole('button', { name: 'Next' });
+    const nextButton = page.getByRole('button', { name: 'Next' });
     await nextButton.click();
 
-    await workflowsPage.page.waitForLoadState('networkidle');
-    await workflowsPage.page.getByText('Add next').waitFor({ state: 'visible', timeout: 10000 });
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByText('Add next').waitFor({ state: 'visible', timeout: 10000 });
 
     // Click "Add action" button to open action selection dialog
-    const addNextMenu = workflowsPage.page.getByTestId('add-next-menu-container');
+    const addNextMenu = page.getByTestId('add-next-menu-container');
     const addActionButton = addNextMenu.getByTestId('context-menu-seq-action-button');
     await addActionButton.click();
-    await workflowsPage.page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Wait for search box to be visible
-    const searchBox = workflowsPage.page.getByRole('searchbox').or(workflowsPage.page.getByPlaceholder(/search/i));
+    const searchBox = page.getByRole('searchbox').or(page.getByPlaceholder(/search/i));
     await searchBox.waitFor({ state: 'visible', timeout: 10000 });
 
     // Wait for initial action list loading to complete
-    const loadingMessages = workflowsPage.page.getByText('This may take a few moments');
+    const loadingMessages = page.getByText('This may take a few moments');
     await loadingMessages.first().waitFor({ state: 'hidden', timeout: 60000 }).catch(() => {});
-    await workflowsPage.page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Search for the ServiceNow API integration action
     const actionName = 'service now cmdb table api';
@@ -43,20 +40,19 @@ test.describe('ServiceNow IDP - E2E Tests', () => {
     await searchBox.pressSequentially(actionName, { delay: 20 });
 
     // Wait for search results to filter (indicated by "Top results" appearing)
-    await workflowsPage.page.getByText('Top results').waitFor({ state: 'visible', timeout: 30000 });
+    await page.getByText('Top results').waitFor({ state: 'visible', timeout: 30000 });
 
     // Expand "Other" section if it exists (label may vary across versions)
-    const otherSection = workflowsPage.page.getByText(/^Other \(/);
+    const otherSection = page.getByText(/^Other \(/);
     if (await otherSection.isVisible({ timeout: 2000 }).catch(() => false)) {
       await otherSection.click();
 
-      // Wait for section's internal loading to complete
       await loadingMessages.first().waitFor({ state: 'hidden', timeout: 60000 }).catch(() => {});
-      await workflowsPage.page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
     }
 
     // Find all instances of this action (may include stale ones from previous installs)
-    const actionElements = await workflowsPage.page.getByText(actionName, { exact: false }).all();
+    const actionElements = await page.getByText(actionName, { exact: false }).all();
 
     if (actionElements.length === 0) {
       throw new Error(`Action '${actionName}' not found in search results`);
@@ -66,33 +62,29 @@ test.describe('ServiceNow IDP - E2E Tests', () => {
 
     let actionVerified = false;
 
-    // Try each instance until we find one that's not stale
     for (let i = 0; i < actionElements.length; i++) {
       console.log(`  Trying instance ${i + 1}/${actionElements.length}...`);
 
       try {
-        // Click on the action
         await actionElements[i].click();
-        await workflowsPage.page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
 
-        // Wait for the details panel to load and check if configuration is present
-        // Stale actions won't show the "Configure" heading
         try {
-          const configureTab = workflowsPage.page.getByRole('tab', { name: 'Configure' });
-          const executionTab = workflowsPage.page.getByRole('tab', { name: 'Execution settings' });
+          const configureTab = page.getByRole('tab', { name: 'Configure' });
+          const executionTab = page.getByRole('tab', { name: 'Execution settings' });
           await Promise.race([
             configureTab.waitFor({ state: 'visible', timeout: 10000 }),
             executionTab.waitFor({ state: 'visible', timeout: 10000 })
           ]);
-          console.log(`✓ Action verified: ${actionName} - action details panel is present`);
+          console.log(`Action verified: ${actionName} - action details panel is present`);
           actionVerified = true;
           break;
         } catch (error) {
-          const errorMsg = error.message || 'Unknown error';
+          const errorMsg = (error as Error).message || 'Unknown error';
           console.log(`  Instance ${i + 1} failed: ${errorMsg}`);
         }
       } catch (error) {
-        console.log(`  Instance ${i + 1} failed: ${error.message}, trying next...`);
+        console.log(`  Instance ${i + 1} failed: ${(error as Error).message}, trying next...`);
       }
     }
 
