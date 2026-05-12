@@ -47,6 +47,15 @@ setup('install app', async ({ page }) => {
       const firstOption = page.locator('[role="option"]').first();
       await firstOption.waitFor({ state: 'visible', timeout: 5000 });
       await firstOption.click();
+
+      // Select time zone (required when a schedule frequency is chosen)
+      const tzDropdown = page.getByLabel('Time zone');
+      if (await tzDropdown.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await tzDropdown.click();
+        const tzOption = page.locator('[role="option"]').first();
+        await tzOption.waitFor({ state: 'visible', timeout: 5000 });
+        await tzOption.click();
+      }
     },
   });
 });
