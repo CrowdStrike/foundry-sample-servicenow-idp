@@ -19,7 +19,7 @@ Target users include organizations that use both CrowdStrike IDP and ServiceNow 
 ## Prerequisites
 
 * The Foundry CLI (instructions below).
-* Python 3.13+ (needed if modifying the app's functions). See [Python For Beginners](https://www.python.org/about/gettingstarted/) for installation instructions.
+* Python 3.14+ (needed if modifying the app's functions). See [Python For Beginners](https://www.python.org/about/gettingstarted/) for installation instructions.
 
 ### Install the Foundry CLI
 
