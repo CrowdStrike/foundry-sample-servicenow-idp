@@ -1,7 +1,9 @@
 version: 2
 updates:
   - package-ecosystem: pip
-    directory: "/functions/servicenowToIdpPolicyRulesTransformer/"
+    directories:
+      - "/functions/servicenowToIdpPolicyRulesTransformer/"
+      - "/.github"
     schedule:
       interval: "weekly"
       day: "monday"
